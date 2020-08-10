@@ -10,15 +10,17 @@ use nom::{
     IResult,
 };
 
-/// ehlo-ok-rsp = ( "250" SP Domain [ SP ehlo-greet ] CRLF ) /
+/// ehlo-ok-rsp = ( "250 " Domain [ SP ehlo-greet ] CRLF ) /
 ///               ( "250-" Domain [ SP ehlo-greet ] CRLF
 ///                 *( "250-" ehlo-line CRLF )
-///                 "250" SP ehlo-line CRLF )
+///                    "250 " ehlo-line CRLF )
+///
+/// Edit: collapsed ("250" SP) to ("250 ")
 pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], EhloOkResp> {
     let parser = alt((
         map(
-            tuple((tag(b"250"), SP, Domain, opt(preceded(SP, ehlo_greet)), CRLF)),
-            |(_, _, domain, maybe_ehlo, _)| EhloOkResp {
+            tuple((tag(b"250 "), Domain, opt(preceded(SP, ehlo_greet)), CRLF)),
+            |(_, domain, maybe_ehlo, _)| EhloOkResp {
                 domain: domain.to_owned(),
                 greet: maybe_ehlo.map(|ehlo| ehlo.to_owned()),
                 lines: Vec::new(),
@@ -31,12 +33,11 @@ pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], EhloOkResp> {
                 opt(preceded(SP, ehlo_greet)),
                 CRLF,
                 many0(delimited(tag(b"250-"), ehlo_line, CRLF)),
-                tag(b"250"),
-                SP,
+                tag(b"250 "),
                 ehlo_line,
                 CRLF,
             )),
-            |(_, domain, maybe_ehlo, _, lines, _, _, (keyword, params), _)| EhloOkResp {
+            |(_, domain, maybe_ehlo, _, lines, _, (keyword, params), _)| EhloOkResp {
                 domain: domain.to_owned(),
                 greet: maybe_ehlo.map(|ehlo| ehlo.to_owned()),
                 lines: {
