@@ -90,43 +90,11 @@ impl std::fmt::Debug for Command {
     }
 }
 
-pub type EhloLine = (String, Option<String>);
-
-#[cfg(test)]
-mod test {
-    use crate::{parse::command::*, types::*};
-
-    #[test]
-    fn test_subdomain() {
-        let (rem, parsed) = sub_domain(b"example???").unwrap();
-        assert_eq!(parsed, b"example");
-        assert_eq!(rem, b"???");
-    }
-
-    #[test]
-    fn test_ehlo() {
-        let (rem, parsed) = ehlo(b"EHLO [123.123.123.123]\r\n???").unwrap();
-        assert_eq!(parsed, Command::Ehlo(b"[123.123.123.123]".to_vec()));
-        assert_eq!(rem, b"???");
-    }
-
-    #[test]
-    fn test_helo() {
-        let (rem, parsed) = helo(b"HELO example.com\r\n???").unwrap();
-        assert_eq!(parsed, Command::Helo(b"example.com".to_vec()));
-        assert_eq!(rem, b"???");
-    }
-
-    #[test]
-    fn test_mail() {
-        let (rem, parsed) = mail(b"MAIL FROM:<userx@y.foo.org>\r\n???").unwrap();
-        assert_eq!(
-            parsed,
-            Command::Mail {
-                data: b"<userx@y.foo.org>".to_vec(),
-                params: None
-            }
-        );
-        assert_eq!(rem, b"???");
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EhloOkResp {
+    pub domain: String,
+    pub greet: Option<String>,
+    pub lines: Vec<EhloLine>,
 }
+
+pub type EhloLine = (String, Vec<String>);

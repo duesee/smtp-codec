@@ -10,7 +10,7 @@ use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, DQUOTE, SP};
 use nom::{
     branch::alt,
     bytes::streaming::{tag, tag_no_case, take_while, take_while1, take_while_m_n},
-    combinator::{opt, recognize},
+    combinator::{map_res, opt, recognize},
     multi::many0,
     sequence::{delimited, preceded, tuple},
     IResult,
@@ -348,10 +348,10 @@ pub fn Argument(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Domain = sub-domain *("." sub-domain)
-pub fn Domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn Domain(input: &[u8]) -> IResult<&[u8], &str> {
     let parser = tuple((sub_domain, many0(tuple((tag(b"."), sub_domain)))));
 
-    let (remaining, parsed) = recognize(parser)(input)?;
+    let (remaining, parsed) = map_res(recognize(parser), std::str::from_utf8)(input)?;
 
     Ok((remaining, parsed))
 }
@@ -389,18 +389,21 @@ pub fn Ldh_str(input: &[u8]) -> IResult<&[u8], &[u8]> {
 ///                       General-address-literal
 ///                   ) "]"
 ///                     ; See Section 4.1.3
-pub fn address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn address_literal(input: &[u8]) -> IResult<&[u8], &str> {
     let parser = delimited(
         tag(b"["),
-        alt((
-            IPv4_address_literal,
-            IPv6_address_literal,
-            General_address_literal,
-        )),
+        map_res(
+            alt((
+                IPv4_address_literal,
+                IPv6_address_literal,
+                General_address_literal,
+            )),
+            std::str::from_utf8,
+        ),
         tag(b"]"),
     );
 
-    let (remaining, parsed) = recognize(parser)(input)?;
+    let (remaining, parsed) = parser(input)?;
 
     Ok((remaining, parsed))
 }
@@ -492,4 +495,44 @@ pub fn String(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let (remaining, parsed) = recognize(parser)(input)?;
 
     Ok((remaining, parsed))
+}
+
+#[cfg(test)]
+mod test {
+    use super::{ehlo, helo, mail, sub_domain};
+    use crate::types::Command;
+
+    #[test]
+    fn test_subdomain() {
+        let (rem, parsed) = sub_domain(b"example???").unwrap();
+        assert_eq!(parsed, b"example");
+        assert_eq!(rem, b"???");
+    }
+
+    #[test]
+    fn test_ehlo() {
+        let (rem, parsed) = ehlo(b"EHLO [123.123.123.123]\r\n???").unwrap();
+        assert_eq!(parsed, Command::Ehlo(b"123.123.123.123".to_vec()));
+        assert_eq!(rem, b"???");
+    }
+
+    #[test]
+    fn test_helo() {
+        let (rem, parsed) = helo(b"HELO example.com\r\n???").unwrap();
+        assert_eq!(parsed, Command::Helo(b"example.com".to_vec()));
+        assert_eq!(rem, b"???");
+    }
+
+    #[test]
+    fn test_mail() {
+        let (rem, parsed) = mail(b"MAIL FROM:<userx@y.foo.org>\r\n???").unwrap();
+        assert_eq!(
+            parsed,
+            Command::Mail {
+                data: b"<userx@y.foo.org>".to_vec(),
+                params: None
+            }
+        );
+        assert_eq!(rem, b"???");
+    }
 }

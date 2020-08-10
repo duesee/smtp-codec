@@ -79,7 +79,7 @@ pub fn By_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
 ///                   ( address-literal FWS "(" TCP-info ")" )
 pub fn Extended_Domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = alt((
-        Domain,
+        recognize(Domain),
         recognize(tuple((Domain, FWS, tag(b"("), TCP_info, tag(b")")))),
         recognize(tuple((
             address_literal,
@@ -100,7 +100,7 @@ pub fn Extended_Domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// TCP-info = address-literal / ( Domain FWS address-literal )
 pub fn TCP_info(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = alt((
-        address_literal,
+        recognize(address_literal),
         recognize(tuple((Domain, FWS, address_literal))),
     ));
 
