@@ -91,6 +91,14 @@ impl std::fmt::Debug for Command {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Greeting {
+    pub domain: String,
+    // TODO: Vec<Option<String>> would be closer to the SMTP ABNF.
+    // What is wrong with you, SMTP?
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EhloOkResp {
     pub domain: String,
     pub greet: Option<String>,
