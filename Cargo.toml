@@ -1,5 +1,5 @@
 [package]
-name = "smtp-proto"
+name = "smtp-codec"
 version = "0.1.0"
 authors = ["Damian Poddebniak <poddebniak@fh-muenster.de>"]
 edition = "2018"
