@@ -165,6 +165,118 @@ impl std::fmt::Debug for Command {
     }
 }
 
+impl Command {
+    pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        use Command::*;
+
+        match self {
+            // helo = "HELO" SP Domain CRLF
+            Helo {
+                fqdn_or_address_literal,
+            } => {
+                writer.write_all(b"HELO ")?;
+                writer.write_all(fqdn_or_address_literal)?;
+            }
+            // ehlo = "EHLO" SP ( Domain / address-literal ) CRLF
+            Ehlo {
+                fqdn_or_address_literal,
+            } => {
+                writer.write_all(b"EHLO ")?;
+                writer.write_all(fqdn_or_address_literal)?;
+            }
+            // mail = "MAIL FROM:" Reverse-path [SP Mail-parameters] CRLF
+            Mail {
+                reverse_path,
+                parameters: None,
+            } => {
+                writer.write_all(b"MAIL FROM:<")?;
+                writer.write_all(reverse_path)?;
+                writer.write_all(b">")?;
+            }
+            Mail {
+                reverse_path,
+                parameters: Some(parameters),
+            } => {
+                writer.write_all(b"MAIL FROM:<")?;
+                writer.write_all(reverse_path)?;
+                writer.write_all(b"> ")?;
+                writer.write_all(parameters)?;
+            }
+            // rcpt = "RCPT TO:" ( "<Postmaster@" Domain ">" / "<Postmaster>" / Forward-path ) [SP Rcpt-parameters] CRLF
+            Rcpt {
+                forward_path,
+                parameters: None,
+            } => {
+                writer.write_all(b"RCPT TO:<")?;
+                writer.write_all(forward_path)?;
+                writer.write_all(b">")?;
+            }
+            Rcpt {
+                forward_path,
+                parameters: Some(parameters),
+            } => {
+                writer.write_all(b"RCPT TO:<")?;
+                writer.write_all(forward_path)?;
+                writer.write_all(b"> ")?;
+                writer.write_all(parameters)?;
+            }
+            // data = "DATA" CRLF
+            Data => writer.write_all(b"DATA")?,
+            // rset = "RSET" CRLF
+            Rset => writer.write_all(b"RSET")?,
+            // vrfy = "VRFY" SP String CRLF
+            Vrfy { user_or_mailbox } => {
+                writer.write_all(b"VRFY ")?;
+                writer.write_all(user_or_mailbox)?;
+            }
+            // expn = "EXPN" SP String CRLF
+            Expn { mailing_list } => {
+                writer.write_all(b"EXPN ")?;
+                writer.write_all(mailing_list)?;
+            }
+            // help = "HELP" [ SP String ] CRLF
+            Help { argument: None } => writer.write_all(b"HELP")?,
+            Help {
+                argument: Some(data),
+            } => {
+                writer.write_all(b"HELP ")?;
+                writer.write_all(data)?;
+            }
+            // noop = "NOOP" [ SP String ] CRLF
+            Noop { argument: None } => writer.write_all(b"NOOP")?,
+            Noop {
+                argument: Some(data),
+            } => {
+                writer.write_all(b"NOOP ")?;
+                writer.write_all(data)?;
+            }
+            // quit = "QUIT" CRLF
+            Quit => writer.write_all(b"QUIT")?,
+            // ----- Extensions -----
+            // starttls = "STARTTLS" CRLF
+            StartTLS => writer.write_all(b"STARTTLS")?,
+            // auth_login_command = "AUTH LOGIN" [SP username] CRLF
+            AuthLogin(None) => {
+                writer.write_all(b"AUTH LOGIN")?;
+            }
+            AuthLogin(Some(data)) => {
+                writer.write_all(b"AUTH LOGIN ")?;
+                writer.write_all(data.as_bytes())?;
+            }
+            // auth_plain_command = "AUTH PLAIN" [SP base64] CRLF
+            AuthPlain(None) => {
+                writer.write_all(b"AUTH PLAIN")?;
+            }
+            AuthPlain(Some(data)) => {
+                writer.write_all(b"AUTH PLAIN ")?;
+                writer.write_all(data.as_bytes())?;
+            }
+        }
+
+        write!(writer, "\r\n")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Greeting {
     pub domain: String,
