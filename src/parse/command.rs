@@ -40,7 +40,12 @@ pub fn helo(input: &[u8]) -> IResult<&[u8], Command> {
 
     let (remaining, (_, _, data, _)) = parser(input)?;
 
-    Ok((remaining, Command::Helo(data.into())))
+    Ok((
+        remaining,
+        Command::Helo {
+            fqdn_or_address_literal: data.into(),
+        },
+    ))
 }
 
 /// ehlo = "EHLO" SP ( Domain / address-literal ) CRLF
@@ -54,7 +59,12 @@ pub fn ehlo(input: &[u8]) -> IResult<&[u8], Command> {
 
     let (remaining, (_, _, data, _)) = parser(input)?;
 
-    Ok((remaining, Command::Ehlo(data.into())))
+    Ok((
+        remaining,
+        Command::Ehlo {
+            fqdn_or_address_literal: data.into(),
+        },
+    ))
 }
 
 /// mail = "MAIL FROM:" Reverse-path [SP Mail-parameters] CRLF
@@ -72,8 +82,8 @@ pub fn mail(input: &[u8]) -> IResult<&[u8], Command> {
     Ok((
         remaining,
         Command::Mail {
-            data: data.into(),
-            params: maybe_params.map(|params| params.into()),
+            reverse_path: data.into(),
+            parameters: maybe_params.map(|params| params.into()),
         },
     ))
 }
@@ -101,8 +111,8 @@ pub fn rcpt(input: &[u8]) -> IResult<&[u8], Command> {
     Ok((
         remaining,
         Command::Rcpt {
-            data: data.into(),
-            params: maybe_params.map(|params| params.into()),
+            forward_path: data.into(),
+            parameters: maybe_params.map(|params| params.into()),
         },
     ))
 }
@@ -131,7 +141,12 @@ pub fn vrfy(input: &[u8]) -> IResult<&[u8], Command> {
 
     let (remaining, (_, _, data, _)) = parser(input)?;
 
-    Ok((remaining, Command::Vrfy(data.into())))
+    Ok((
+        remaining,
+        Command::Vrfy {
+            user_or_mailbox: data.into(),
+        },
+    ))
 }
 
 /// expn = "EXPN" SP String CRLF
@@ -140,7 +155,12 @@ pub fn expn(input: &[u8]) -> IResult<&[u8], Command> {
 
     let (remaining, (_, _, data, _)) = parser(input)?;
 
-    Ok((remaining, Command::Expn(data.into())))
+    Ok((
+        remaining,
+        Command::Expn {
+            mailing_list: data.into(),
+        },
+    ))
 }
 
 /// help = "HELP" [ SP String ] CRLF
@@ -149,7 +169,12 @@ pub fn help(input: &[u8]) -> IResult<&[u8], Command> {
 
     let (remaining, (_, maybe_data, _)) = parser(input)?;
 
-    Ok((remaining, Command::Help(maybe_data.map(|data| data.into()))))
+    Ok((
+        remaining,
+        Command::Help {
+            argument: maybe_data.map(|data| data.into()),
+        },
+    ))
 }
 
 /// noop = "NOOP" [ SP String ] CRLF
@@ -158,7 +183,12 @@ pub fn noop(input: &[u8]) -> IResult<&[u8], Command> {
 
     let (remaining, (_, maybe_data, _)) = parser(input)?;
 
-    Ok((remaining, Command::Noop(maybe_data.map(|data| data.into()))))
+    Ok((
+        remaining,
+        Command::Noop {
+            argument: maybe_data.map(|data| data.into()),
+        },
+    ))
 }
 
 /// quit = "QUIT" CRLF
@@ -512,14 +542,24 @@ mod test {
     #[test]
     fn test_ehlo() {
         let (rem, parsed) = ehlo(b"EHLO [123.123.123.123]\r\n???").unwrap();
-        assert_eq!(parsed, Command::Ehlo(b"123.123.123.123".to_vec()));
+        assert_eq!(
+            parsed,
+            Command::Ehlo {
+                fqdn_or_address_literal: b"123.123.123.123".to_vec()
+            }
+        );
         assert_eq!(rem, b"???");
     }
 
     #[test]
     fn test_helo() {
         let (rem, parsed) = helo(b"HELO example.com\r\n???").unwrap();
-        assert_eq!(parsed, Command::Helo(b"example.com".to_vec()));
+        assert_eq!(
+            parsed,
+            Command::Helo {
+                fqdn_or_address_literal: b"example.com".to_vec()
+            }
+        );
         assert_eq!(rem, b"???");
     }
 
@@ -529,8 +569,8 @@ mod test {
         assert_eq!(
             parsed,
             Command::Mail {
-                data: b"<userx@y.foo.org>".to_vec(),
-                params: None
+                reverse_path: b"<userx@y.foo.org>".to_vec(),
+                parameters: None
             }
         );
         assert_eq!(rem, b"???");
