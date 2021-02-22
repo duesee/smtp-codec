@@ -31,7 +31,7 @@ pub fn Greeting(input: &[u8]) -> IResult<&[u8], GreetingType> {
                 domain: domain.to_owned(),
                 text: maybe_text
                     .map(|str| str.to_string())
-                    .unwrap_or("".to_string()),
+                    .unwrap_or_else(|| "".to_string()),
             },
         ),
         map(
@@ -50,18 +50,18 @@ pub fn Greeting(input: &[u8]) -> IResult<&[u8], GreetingType> {
                 text: {
                     let mut res = maybe_text
                         .map(|str| format!("{}\n", str))
-                        .unwrap_or("\n".to_string());
+                        .unwrap_or_else(|| "\n".to_string());
 
                     for text in more_text {
                         let text = text
                             .map(|str| format!("{}\n", str))
-                            .unwrap_or("\n".to_string());
+                            .unwrap_or_else(|| "\n".to_string());
                         res.push_str(&text);
                     }
 
                     let text = moar_text
-                        .map(|str| format!("{}", str))
-                        .unwrap_or("".to_string());
+                        .map(|str| str.to_string())
+                        .unwrap_or_else(|| "".to_string());
                     res.push_str(&text);
 
                     res
@@ -80,10 +80,7 @@ pub fn Greeting(input: &[u8]) -> IResult<&[u8], GreetingType> {
 /// textstring = 1*(%d09 / %d32-126)
 pub fn textstring(input: &[u8]) -> IResult<&[u8], &str> {
     fn is_value(byte: u8) -> bool {
-        match byte {
-            9 | 32..=126 => true,
-            _ => false,
-        }
+        matches!(byte, 9 | 32..=126)
     }
 
     let (remaining, parsed) = map_res(take_while1(is_value), std::str::from_utf8)(input)?;

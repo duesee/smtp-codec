@@ -421,17 +421,11 @@ pub mod addr_spec {
     /// dtext = %d33-90 / %d94-126 / obs-dtext
     pub fn dtext(input: &[u8]) -> IResult<&[u8], &[u8]> {
         fn is_a(byte: u8) -> bool {
-            match byte {
-                33..=90 => true,
-                _ => false,
-            }
+            matches!(byte, 33..=90)
         }
 
         fn is_b(byte: u8) -> bool {
-            match byte {
-                94..=126 => true,
-                _ => false,
-            }
+            matches!(byte, 94..=126)
         }
 
         let parser = alt((
@@ -540,10 +534,7 @@ pub mod obsolete {
     ///
     /// obs-NO-WS-CTL = %d1-8 / %d11 / %d12 / %d14-31 / %d127
     pub fn is_obs_NO_WS_CTL(byte: u8) -> bool {
-        match byte {
-            1..=8 | 11 | 12 | 14..=31 | 127 => true,
-            _ => false,
-        }
+        matches!(byte, 1..=8 | 11 | 12 | 14..=31 | 127)
     }
 
     /// obs-qtext = obs-NO-WS-CTL

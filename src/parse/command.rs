@@ -354,10 +354,7 @@ pub fn esmtp_keyword(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// esmtp-value = 1*(%d33-60 / %d62-126)
 pub fn esmtp_value(input: &[u8]) -> IResult<&[u8], &[u8]> {
     fn is_value_character(byte: u8) -> bool {
-        match byte {
-            33..=60 | 62..=126 => true,
-            _ => false,
-        }
+        matches!(byte, 33..=60 | 62..=126)
     }
 
     take_while1(is_value_character)(input)
@@ -494,10 +491,7 @@ pub fn QcontentSMTP(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// quoted-pairSMTP = %d92 %d32-126
 pub fn quoted_pairSMTP(input: &[u8]) -> IResult<&[u8], &[u8]> {
     fn is_ascii_bs_or_sp(byte: u8) -> bool {
-        match byte {
-            32..=126 => true,
-            _ => false,
-        }
+        matches!(byte, 32..=126)
     }
 
     let parser = tuple((tag("\\"), take_while_m_n(1, 1, is_ascii_bs_or_sp)));
@@ -512,10 +506,7 @@ pub fn quoted_pairSMTP(input: &[u8]) -> IResult<&[u8], &[u8]> {
 ///
 /// qtextSMTP = %d32-33 / %d35-91 / %d93-126
 pub fn is_qtextSMTP(byte: u8) -> bool {
-    match byte {
-        32..=33 | 35..=91 | 93..=126 => true,
-        _ => false,
-    }
+    matches!(byte, 32..=33 | 35..=91 | 93..=126)
 }
 
 /// String = Atom / Quoted-string

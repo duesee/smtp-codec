@@ -73,10 +73,7 @@ pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], EhloOkResp> {
 /// ehlo-greet = 1*(%d0-9 / %d11-12 / %d14-127)
 pub fn ehlo_greet(input: &[u8]) -> IResult<&[u8], &str> {
     fn is_valid_character(byte: u8) -> bool {
-        match byte {
-            0..=9 | 11..=12 | 14..=127 => true,
-            _ => false,
-        }
+        matches!(byte, 0..=9 | 11..=12 | 14..=127)
     }
 
     map_res(take_while1(is_valid_character), std::str::from_utf8)(input)
@@ -96,7 +93,7 @@ pub fn ehlo_line(input: &[u8]) -> IResult<&[u8], (&str, Vec<&str>)> {
 
     let (remaining, (ehlo_keyword, ehlo_params)) = parser(input)?;
 
-    Ok((remaining, (ehlo_keyword, ehlo_params.unwrap_or(vec![]))))
+    Ok((remaining, (ehlo_keyword, ehlo_params.unwrap_or_default())))
 }
 
 /// Additional syntax of ehlo-params depends on ehlo-keyword
@@ -119,10 +116,7 @@ pub fn ehlo_keyword(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// ehlo-param = 1*(%d33-126)
 pub fn ehlo_param(input: &[u8]) -> IResult<&[u8], &str> {
     fn is_valid_character(byte: u8) -> bool {
-        match byte {
-            33..=126 => true,
-            _ => false,
-        }
+        matches!(byte, 33..=126)
     }
 
     map_res(take_while1(is_valid_character), std::str::from_utf8)(input)

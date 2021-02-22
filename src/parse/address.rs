@@ -54,10 +54,7 @@ pub fn Standardized_tag(input: &[u8]) -> IResult<&[u8], &[u8]> {
 ///
 /// dcontent = %d33-90 / %d94-126
 pub fn is_dcontent(byte: u8) -> bool {
-    match byte {
-        33..=90 | 94..=126 => true,
-        _ => false,
-    }
+    matches!(byte, 33..=90 | 94..=126)
 }
 
 /// Representing a decimal integer value in the range 0 through 255
