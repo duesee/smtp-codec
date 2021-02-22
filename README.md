@@ -1,6 +1,6 @@
 # SMTP Protocol
 
-This crate provides some types and many parsers for SMTP.
+This crate provides some types and many parsers for SMTP. Many things are there, but it is still in a very rough state.
 
 # License
 
