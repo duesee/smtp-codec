@@ -23,7 +23,7 @@ fn is_base64_char(i: u8) -> bool {
 }
 
 pub fn base64(input: &[u8]) -> IResult<&[u8], &str> {
-    let parser = map_res(
+    let mut parser = map_res(
         recognize(tuple((
             take_while(is_base64_char),
             opt(alt((tag("=="), tag("=")))),

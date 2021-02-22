@@ -17,7 +17,7 @@ use nom::{
 };
 
 pub fn command(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = alt((
+    let mut parser = alt((
         helo, ehlo, mail, rcpt, data, rset, vrfy, expn, help, noop, quit,
         starttls,   // Extensions
         auth_login, // https://interoperability.blob.core.windows.net/files/MS-XLOGIN/[MS-XLOGIN].pdf
@@ -31,7 +31,7 @@ pub fn command(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// helo = "HELO" SP Domain CRLF
 pub fn helo(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((
+    let mut parser = tuple((
         tag_no_case(b"HELO"),
         SP,
         alt((Domain, address_literal)), // address_literal alternative for Geary
@@ -50,7 +50,7 @@ pub fn helo(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// ehlo = "EHLO" SP ( Domain / address-literal ) CRLF
 pub fn ehlo(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((
+    let mut parser = tuple((
         tag_no_case(b"EHLO"),
         SP,
         alt((Domain, address_literal)),
@@ -69,7 +69,7 @@ pub fn ehlo(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// mail = "MAIL FROM:" Reverse-path [SP Mail-parameters] CRLF
 pub fn mail(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((
+    let mut parser = tuple((
         tag_no_case(b"MAIL FROM:"),
         opt(SP), // Out-of-Spec, but Outlook does it ...
         Reverse_path,
@@ -94,7 +94,7 @@ pub fn mail(input: &[u8]) -> IResult<&[u8], Command> {
 /// local-parts, the "Postmaster" string shown above is
 /// treated as case-insensitive.
 pub fn rcpt(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((
+    let mut parser = tuple((
         tag_no_case(b"RCPT TO:"),
         opt(SP), // Out-of-Spec, but Outlook does it ...
         alt((
@@ -119,7 +119,7 @@ pub fn rcpt(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// data = "DATA" CRLF
 pub fn data(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((tag_no_case(b"DATA"), CRLF));
+    let mut parser = tuple((tag_no_case(b"DATA"), CRLF));
 
     let (remaining, _) = parser(input)?;
 
@@ -128,7 +128,7 @@ pub fn data(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// rset = "RSET" CRLF
 pub fn rset(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((tag_no_case(b"RSET"), CRLF));
+    let mut parser = tuple((tag_no_case(b"RSET"), CRLF));
 
     let (remaining, _) = parser(input)?;
 
@@ -137,7 +137,7 @@ pub fn rset(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// vrfy = "VRFY" SP String CRLF
 pub fn vrfy(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((tag_no_case(b"VRFY"), SP, String, CRLF));
+    let mut parser = tuple((tag_no_case(b"VRFY"), SP, String, CRLF));
 
     let (remaining, (_, _, data, _)) = parser(input)?;
 
@@ -151,7 +151,7 @@ pub fn vrfy(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// expn = "EXPN" SP String CRLF
 pub fn expn(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((tag_no_case(b"EXPN"), SP, String, CRLF));
+    let mut parser = tuple((tag_no_case(b"EXPN"), SP, String, CRLF));
 
     let (remaining, (_, _, data, _)) = parser(input)?;
 
@@ -165,7 +165,7 @@ pub fn expn(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// help = "HELP" [ SP String ] CRLF
 pub fn help(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((tag_no_case(b"HELP"), opt(preceded(SP, String)), CRLF));
+    let mut parser = tuple((tag_no_case(b"HELP"), opt(preceded(SP, String)), CRLF));
 
     let (remaining, (_, maybe_data, _)) = parser(input)?;
 
@@ -179,7 +179,7 @@ pub fn help(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// noop = "NOOP" [ SP String ] CRLF
 pub fn noop(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((tag_no_case(b"NOOP"), opt(preceded(SP, String)), CRLF));
+    let mut parser = tuple((tag_no_case(b"NOOP"), opt(preceded(SP, String)), CRLF));
 
     let (remaining, (_, maybe_data, _)) = parser(input)?;
 
@@ -193,7 +193,7 @@ pub fn noop(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// quit = "QUIT" CRLF
 pub fn quit(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((tag_no_case(b"QUIT"), CRLF));
+    let mut parser = tuple((tag_no_case(b"QUIT"), CRLF));
 
     let (remaining, _) = parser(input)?;
 
@@ -201,7 +201,7 @@ pub fn quit(input: &[u8]) -> IResult<&[u8], Command> {
 }
 
 pub fn starttls(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((tag_no_case(b"STARTTLS"), CRLF));
+    let mut parser = tuple((tag_no_case(b"STARTTLS"), CRLF));
 
     let (remaining, _) = parser(input)?;
 
@@ -220,7 +220,7 @@ pub fn starttls(input: &[u8]) -> IResult<&[u8], Command> {
 /// auth_login_password_challenge = "334 UGFzc3dvcmQ6" CRLF
 /// auth_login_password_response  = password CRLF
 pub fn auth_login(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((
+    let mut parser = tuple((
         tag_no_case(b"AUTH"),
         SP,
         tag_no_case("LOGIN"),
@@ -237,7 +237,7 @@ pub fn auth_login(input: &[u8]) -> IResult<&[u8], Command> {
 }
 
 pub fn auth_plain(input: &[u8]) -> IResult<&[u8], Command> {
-    let parser = tuple((
+    let mut parser = tuple((
         tag_no_case(b"AUTH"),
         SP,
         tag_no_case("PLAIN"),
@@ -420,7 +420,7 @@ pub fn Ldh_str(input: &[u8]) -> IResult<&[u8], &[u8]> {
 ///                   ) "]"
 ///                     ; See Section 4.1.3
 pub fn address_literal(input: &[u8]) -> IResult<&[u8], &str> {
-    let parser = delimited(
+    let mut parser = delimited(
         tag(b"["),
         map_res(
             alt((

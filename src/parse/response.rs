@@ -1,11 +1,10 @@
 use crate::{parse::command::Domain, types::EhloOkResp};
 use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, SP};
-use nom::multi::separated_list;
 use nom::{
     branch::alt,
     bytes::streaming::{tag, take_while, take_while1, take_while_m_n},
     combinator::{map, map_res, opt, recognize},
-    multi::many0,
+    multi::{many0, separated_list0},
     sequence::{delimited, preceded, tuple},
     IResult,
 };
@@ -17,7 +16,7 @@ use nom::{
 ///
 /// Edit: collapsed ("250" SP) to ("250 ")
 pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], EhloOkResp> {
-    let parser = alt((
+    let mut parser = alt((
         map(
             tuple((tag(b"250 "), Domain, opt(preceded(SP, ehlo_greet)), CRLF)),
             |(_, domain, maybe_ehlo, _)| EhloOkResp {
@@ -87,11 +86,11 @@ pub fn ehlo_greet(input: &[u8]) -> IResult<&[u8], &str> {
 ///
 /// TODO: SMTP servers often respond with "AUTH=LOGIN PLAIN". Why?
 pub fn ehlo_line(input: &[u8]) -> IResult<&[u8], (&str, Vec<&str>)> {
-    let parser = tuple((
+    let mut parser = tuple((
         map_res(ehlo_keyword, std::str::from_utf8),
         opt(preceded(
             alt((SP, tag("="))), // TODO: For Outlook?
-            separated_list(SP, ehlo_param),
+            separated_list0(SP, ehlo_param),
         )),
     ));
 

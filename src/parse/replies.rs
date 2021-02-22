@@ -19,7 +19,7 @@ use nom::{
 ///            *( "220-" [ textstring ] CRLF )
 ///            "220" [ SP textstring ] CRLF )
 pub fn Greeting(input: &[u8]) -> IResult<&[u8], GreetingType> {
-    let parser = alt((
+    let mut parser = alt((
         map(
             tuple((
                 tag(b"220 "),
