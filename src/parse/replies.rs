@@ -1,7 +1,7 @@
 //! 4.2.  SMTP Replies (RFC 5321)
 
 use crate::{
-    parse::command::{address_literal, Domain},
+    parse::{address::address_literal, Domain},
     types::Greeting as GreetingType,
 };
 use abnf_core::streaming::{CRLF, SP};

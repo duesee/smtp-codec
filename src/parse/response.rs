@@ -1,9 +1,12 @@
-use crate::{parse::command::Domain, types::EhloOkResp};
+use crate::{
+    parse::{number, Domain},
+    types::{AuthMechanism, Capability, EhloOkResp},
+};
 use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, SP};
 use nom::{
     branch::alt,
-    bytes::streaming::{tag, take_while, take_while1, take_while_m_n},
-    combinator::{map, map_res, opt, recognize},
+    bytes::streaming::{tag, tag_no_case, take_while, take_while1, take_while_m_n},
+    combinator::{map, map_res, opt, recognize, value},
     multi::{many0, separated_list0},
     sequence::{delimited, preceded, tuple},
     IResult,
@@ -36,27 +39,11 @@ pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], EhloOkResp> {
                 ehlo_line,
                 CRLF,
             )),
-            |(_, domain, maybe_ehlo, _, lines, _, (keyword, params), _)| EhloOkResp {
+            |(_, domain, maybe_ehlo, _, mut lines, _, line, _)| EhloOkResp {
                 domain: domain.to_owned(),
                 greet: maybe_ehlo.map(|ehlo| ehlo.to_owned()),
                 lines: {
-                    let mut lines = lines
-                        .iter()
-                        .map(|(keyword, params)| {
-                            let params = params
-                                .iter()
-                                .map(|param| param.to_string())
-                                .collect::<Vec<String>>();
-                            (keyword.to_string(), params)
-                        })
-                        .collect::<Vec<(String, Vec<String>)>>();
-                    lines.push((
-                        keyword.to_string(),
-                        params
-                            .iter()
-                            .map(|param| param.to_string())
-                            .collect::<Vec<String>>(),
-                    ));
+                    lines.push(line);
                     lines
                 },
             },
@@ -82,8 +69,14 @@ pub fn ehlo_greet(input: &[u8]) -> IResult<&[u8], &str> {
 /// ehlo-line = ehlo-keyword *( SP ehlo-param )
 ///
 /// TODO: SMTP servers often respond with "AUTH=LOGIN PLAIN". Why?
-pub fn ehlo_line(input: &[u8]) -> IResult<&[u8], (&str, Vec<&str>)> {
-    let mut parser = tuple((
+pub fn ehlo_line(input: &[u8]) -> IResult<&[u8], Capability> {
+    let auth = tuple((
+        tag_no_case("AUTH"),
+        alt((tag_no_case(" "), tag_no_case("="))),
+        separated_list0(SP, auth_mechanism),
+    ));
+
+    let other = tuple((
         map_res(ehlo_keyword, std::str::from_utf8),
         opt(preceded(
             alt((SP, tag("="))), // TODO: For Outlook?
@@ -91,9 +84,56 @@ pub fn ehlo_line(input: &[u8]) -> IResult<&[u8], (&str, Vec<&str>)> {
         )),
     ));
 
-    let (remaining, (ehlo_keyword, ehlo_params)) = parser(input)?;
+    alt((
+        value(Capability::EXPN, tag_no_case("EXPN")),
+        value(Capability::Help, tag_no_case("HELP")),
+        value(Capability::EightBitMIME, tag_no_case("8BITMIME")),
+        map(preceded(tag_no_case("SIZE "), number), Capability::Size),
+        value(Capability::Chunking, tag_no_case("CHUNKING")),
+        value(Capability::BinaryMIME, tag_no_case("BINARYMIME")),
+        value(Capability::Checkpoint, tag_no_case("CHECKPOINT")),
+        value(Capability::DeliverBy, tag_no_case("DELIVERBY")),
+        value(Capability::Pipelining, tag_no_case("PIPELINING")),
+        value(Capability::DSN, tag_no_case("DSN")),
+        value(Capability::ETRN, tag_no_case("ETRN")),
+        value(
+            Capability::EnhancedStatusCodes,
+            tag_no_case("ENHANCEDSTATUSCODES"),
+        ),
+        value(Capability::StartTLS, tag_no_case("STARTTLS")),
+        // FIXME: NO-SOLICITING
+        value(Capability::MTRK, tag_no_case("MTRK")),
+        value(Capability::ATRN, tag_no_case("ATRN")),
+        map(auth, |(_, _, mechanisms)| Capability::Auth(mechanisms)),
+        value(Capability::BURL, tag_no_case("BURL")),
+        // FIXME: FUTURERELEASE
+        // FIXME: CONPERM
+        // FIXME: CONNEG
+        value(Capability::SMTPUTF8, tag_no_case("SMTPUTF8")),
+        // FIXME: MT-PRIORITY
+        value(Capability::RRVS, tag_no_case("RRVS")),
+        value(Capability::RequireTLS, tag_no_case("REQUIRETLS")),
+        map(other, |(keyword, params)| Capability::Other {
+            keyword: keyword.into(),
+            params: params
+                .map(|v| v.iter().map(|s| s.to_string()).collect())
+                .unwrap_or_default(),
+        }),
+    ))(input)
+}
 
-    Ok((remaining, (ehlo_keyword, ehlo_params.unwrap_or_default())))
+pub fn auth_mechanism(input: &[u8]) -> IResult<&[u8], AuthMechanism> {
+    alt((
+        value(AuthMechanism::Login, tag_no_case("LOGIN")),
+        value(AuthMechanism::Plain, tag_no_case("PLAIN")),
+        value(AuthMechanism::CramMD5, tag_no_case("CRAM-MD5")),
+        value(AuthMechanism::CramSHA1, tag_no_case("CRAM-SHA1")),
+        value(AuthMechanism::DigestMD5, tag_no_case("DIGEST-MD5")),
+        value(AuthMechanism::ScramMD5, tag_no_case("SCRAM-MD5")),
+        value(AuthMechanism::GSSAPI, tag_no_case("GSSAPI")),
+        value(AuthMechanism::NTLM, tag_no_case("NTLM")),
+        map(ehlo_param, |param| AuthMechanism::Other(param.to_string())),
+    ))(input)
 }
 
 /// Additional syntax of ehlo-params depends on ehlo-keyword
@@ -125,6 +165,7 @@ pub fn ehlo_param(input: &[u8]) -> IResult<&[u8], &str> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::types::AuthMechanism;
 
     #[test]
     fn test_ehlo_ok_rsp() {
@@ -144,17 +185,19 @@ mod test {
                 domain: "example.org".into(),
                 greet: Some("hello".into()),
                 lines: vec![
-                    (
-                        "AUTH".into(),
-                        vec!["LOGIN".into(), "CRAM-MD5".into(), "PLAIN".into()]
-                    ),
-                    (
-                        "AUTH".into(),
-                        vec!["LOGIN".into(), "CRAM-MD5".into(), "PLAIN".into()]
-                    ),
-                    ("STARTTLS".into(), vec![]),
-                    ("SIZE".into(), vec!["12345".into()]),
-                    ("8BITMIME".into(), vec![]),
+                    Capability::Auth(vec![
+                        AuthMechanism::Login,
+                        AuthMechanism::CramMD5,
+                        AuthMechanism::Plain
+                    ]),
+                    Capability::Auth(vec![
+                        AuthMechanism::Login,
+                        AuthMechanism::CramMD5,
+                        AuthMechanism::Plain
+                    ]),
+                    Capability::StartTLS,
+                    Capability::Size(12345),
+                    Capability::EightBitMIME,
                 ],
             }
         );
@@ -162,9 +205,8 @@ mod test {
 
     #[test]
     fn test_ehlo_line() {
-        let (rem, (keyword, params)) = ehlo_line(b"SIZE 123456\r\n").unwrap();
+        let (rem, capability) = ehlo_line(b"SIZE 123456\r\n").unwrap();
         assert_eq!(rem, b"\r\n");
-        assert_eq!(keyword, "SIZE");
-        assert_eq!(params, &["123456"]);
+        assert_eq!(capability, Capability::Size(123456));
     }
 }

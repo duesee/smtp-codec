@@ -1,21 +1,21 @@
-use crate::escape;
+use crate::utils::escape_quoted;
 use std::io::Write;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     Ehlo {
-        fqdn_or_address_literal: Vec<u8>,
+        fqdn_or_address_literal: String,
     },
     Helo {
-        fqdn_or_address_literal: Vec<u8>,
+        fqdn_or_address_literal: String,
     },
     Mail {
-        reverse_path: Vec<u8>,
-        parameters: Option<Vec<u8>>,
+        reverse_path: String,
+        parameters: Vec<Parameter>,
     },
     Rcpt {
-        forward_path: Vec<u8>,
-        parameters: Option<Vec<u8>>,
+        forward_path: String,
+        parameters: Vec<Parameter>,
     },
     Data,
     Rset,
@@ -26,7 +26,7 @@ pub enum Command {
     /// This command has no effect on the reverse-path buffer, the forward-
     /// path buffer, or the mail data buffer.
     Vrfy {
-        user_or_mailbox: Vec<u8>,
+        user_or_mailbox: AtomOrQuoted,
     },
     /// This command asks the receiver to confirm that the argument
     /// identifies a mailing list, and if so, to return the membership of
@@ -38,7 +38,7 @@ pub enum Command {
     /// path buffer, or the mail data buffer, and it may be issued at any
     /// time.
     Expn {
-        mailing_list: Vec<u8>,
+        mailing_list: AtomOrQuoted,
     },
     /// This command causes the server to send helpful information to the
     /// client.  The command MAY take an argument (e.g., any command name)
@@ -51,7 +51,7 @@ pub enum Command {
     /// path buffer, or the mail data buffer, and it may be issued at any
     /// time.
     Help {
-        argument: Option<Vec<u8>>,
+        argument: Option<AtomOrQuoted>,
     },
     /// This command does not affect any parameters or previously entered
     /// commands.  It specifies no action other than that the receiver send a
@@ -63,7 +63,7 @@ pub enum Command {
     /// path buffer, or the mail data buffer, and it may be issued at any
     /// time.
     Noop {
-        argument: Option<Vec<u8>>,
+        argument: Option<AtomOrQuoted>,
     },
     /// This command specifies that the receiver MUST send a "221 OK" reply,
     /// and then close the transmission channel.
@@ -90,6 +90,18 @@ pub enum Command {
     AuthPlain(Option<String>),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Parameter {
+    keyword: String,
+    value: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AtomOrQuoted {
+    Atom(String),
+    Quoted(String),
+}
+
 impl Command {
     pub fn name(&self) -> &'static str {
         match self {
@@ -112,60 +124,7 @@ impl Command {
             Command::AuthPlain(_) => "AUTHPLAIN",
         }
     }
-}
 
-// FIXME: try to derive(Debug) instead
-impl std::fmt::Debug for Command {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        use Command::*;
-
-        match self {
-            Ehlo {
-                fqdn_or_address_literal,
-            } => write!(f, "Ehlo({})", escape(fqdn_or_address_literal)),
-            Helo {
-                fqdn_or_address_literal,
-            } => write!(f, "Helo({})", escape(fqdn_or_address_literal)),
-            Mail {
-                reverse_path: path,
-                parameters: None,
-            } => write!(f, "Mail({})", escape(path)),
-            Mail {
-                reverse_path: path,
-                parameters: Some(params),
-            } => write!(f, "Mail({}, {})", escape(path), escape(params)),
-            Rcpt {
-                forward_path: data,
-                parameters: None,
-            } => write!(f, "Rcpt({})", escape(data)),
-            Rcpt {
-                forward_path: data,
-                parameters: Some(params),
-            } => write!(f, "Rcpt({}, {})", escape(data), escape(params)),
-            Data => write!(f, "Data"),
-            Rset => write!(f, "Rset"),
-            Vrfy { user_or_mailbox } => write!(f, "Vrfy({})", escape(user_or_mailbox)),
-            Expn { mailing_list } => write!(f, "Expn({})", escape(mailing_list)),
-            Help { argument: None } => write!(f, "Help"),
-            Help {
-                argument: Some(data),
-            } => write!(f, "Help({})", escape(data)),
-            Noop { argument: None } => write!(f, "Noop"),
-            Noop {
-                argument: Some(data),
-            } => write!(f, "Noop({})", escape(data)),
-            Quit => write!(f, "Quit"),
-            // Extensions
-            StartTLS => write!(f, "StartTLS"),
-            // TODO: SMTP Auth
-            AuthLogin(data) => write!(f, "AuthLogin({:?})", data),
-            // TODO: SMTP Auth
-            AuthPlain(data) => write!(f, "AuthPlain({:?})", data),
-        }
-    }
-}
-
-impl Command {
     pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
         use Command::*;
 
@@ -175,50 +134,42 @@ impl Command {
                 fqdn_or_address_literal,
             } => {
                 writer.write_all(b"HELO ")?;
-                writer.write_all(fqdn_or_address_literal)?;
+                writer.write_all(fqdn_or_address_literal.as_bytes())?;
             }
             // ehlo = "EHLO" SP ( Domain / address-literal ) CRLF
             Ehlo {
                 fqdn_or_address_literal,
             } => {
                 writer.write_all(b"EHLO ")?;
-                writer.write_all(fqdn_or_address_literal)?;
+                writer.write_all(fqdn_or_address_literal.as_bytes())?;
             }
             // mail = "MAIL FROM:" Reverse-path [SP Mail-parameters] CRLF
             Mail {
                 reverse_path,
-                parameters: None,
+                parameters,
             } => {
                 writer.write_all(b"MAIL FROM:<")?;
-                writer.write_all(reverse_path)?;
+                writer.write_all(reverse_path.as_bytes())?;
                 writer.write_all(b">")?;
-            }
-            Mail {
-                reverse_path,
-                parameters: Some(parameters),
-            } => {
-                writer.write_all(b"MAIL FROM:<")?;
-                writer.write_all(reverse_path)?;
-                writer.write_all(b"> ")?;
-                writer.write_all(parameters)?;
+
+                for parameter in parameters {
+                    writer.write_all(b" ")?;
+                    parameter.serialize(writer)?;
+                }
             }
             // rcpt = "RCPT TO:" ( "<Postmaster@" Domain ">" / "<Postmaster>" / Forward-path ) [SP Rcpt-parameters] CRLF
             Rcpt {
                 forward_path,
-                parameters: None,
+                parameters,
             } => {
                 writer.write_all(b"RCPT TO:<")?;
-                writer.write_all(forward_path)?;
+                writer.write_all(forward_path.as_bytes())?;
                 writer.write_all(b">")?;
-            }
-            Rcpt {
-                forward_path,
-                parameters: Some(parameters),
-            } => {
-                writer.write_all(b"RCPT TO:<")?;
-                writer.write_all(forward_path)?;
-                writer.write_all(b"> ")?;
-                writer.write_all(parameters)?;
+
+                for parameter in parameters {
+                    writer.write_all(b" ")?;
+                    parameter.serialize(writer)?;
+                }
             }
             // data = "DATA" CRLF
             Data => writer.write_all(b"DATA")?,
@@ -227,12 +178,12 @@ impl Command {
             // vrfy = "VRFY" SP String CRLF
             Vrfy { user_or_mailbox } => {
                 writer.write_all(b"VRFY ")?;
-                writer.write_all(user_or_mailbox)?;
+                user_or_mailbox.serialize(writer)?;
             }
             // expn = "EXPN" SP String CRLF
             Expn { mailing_list } => {
                 writer.write_all(b"EXPN ")?;
-                writer.write_all(mailing_list)?;
+                mailing_list.serialize(writer)?;
             }
             // help = "HELP" [ SP String ] CRLF
             Help { argument: None } => writer.write_all(b"HELP")?,
@@ -240,7 +191,7 @@ impl Command {
                 argument: Some(data),
             } => {
                 writer.write_all(b"HELP ")?;
-                writer.write_all(data)?;
+                data.serialize(writer)?;
             }
             // noop = "NOOP" [ SP String ] CRLF
             Noop { argument: None } => writer.write_all(b"NOOP")?,
@@ -248,7 +199,7 @@ impl Command {
                 argument: Some(data),
             } => {
                 writer.write_all(b"NOOP ")?;
-                writer.write_all(data)?;
+                data.serialize(writer)?;
             }
             // quit = "QUIT" CRLF
             Quit => writer.write_all(b"QUIT")?,
@@ -277,6 +228,45 @@ impl Command {
     }
 }
 
+impl Parameter {
+    pub fn new<K: Into<String>, V: Into<String>>(keyword: K, value: Option<V>) -> Parameter {
+        Parameter {
+            keyword: keyword.into(),
+            value: value.map(Into::into),
+        }
+    }
+
+    pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        writer.write_all(self.keyword.as_bytes())?;
+
+        if let Some(ref value) = self.value {
+            writer.write_all(b"=")?;
+            writer.write_all(value.as_bytes())?;
+        }
+
+        Ok(())
+    }
+}
+
+impl AtomOrQuoted {
+    pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        match self {
+            AtomOrQuoted::Atom(atom) => {
+                writer.write_all(atom.as_bytes())?;
+            }
+            AtomOrQuoted::Quoted(quoted) => {
+                writer.write_all(b"\"")?;
+                writer.write_all(escape_quoted(quoted).as_bytes())?;
+                writer.write_all(b"\"")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Greeting {
     pub domain: String,
@@ -289,7 +279,146 @@ pub struct Greeting {
 pub struct EhloOkResp {
     pub domain: String,
     pub greet: Option<String>,
-    pub lines: Vec<EhloLine>,
+    pub lines: Vec<Capability>,
 }
 
-pub type EhloLine = (String, Vec<String>);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Capability {
+    // Send as mail [RFC821]
+    // The description of SEND was updated by [RFC1123] and then its actual use was deprecated in [RFC2821]
+    // SEND,
+
+    // Send as mail or to terminal [RFC821]
+    // The description of SOML was updated by [RFC1123] and then its actual use was deprecated in [RFC2821]
+    // SOML,
+
+    // Send as mail and to terminal [RFC821]
+    // The description of SAML was updated by [RFC1123] and then its actual use was deprecated in [RFC2821]
+    // SAML,
+
+    // Interchange the client and server roles [RFC821]
+    // The actual use of TURN was deprecated in [RFC2821]
+    // TURN,
+
+    // SMTP Responsible Submitter [RFC4405]
+    // Deprecated by [https://datatracker.ietf.org/doc/status-change-change-sender-id-to-historic].
+    // SUBMITTER,
+
+    // Internationalized email address [RFC5336]
+    // Experimental; deprecated in [RFC6531].
+    // UTF8SMTP,
+
+    // ---------------------------------------------------------------------------------------------
+    /// Verbose [Eric Allman]
+    // VERB,
+
+    /// One message transaction only [Eric Allman]
+    // ONEX,
+
+    // ---------------------------------------------------------------------------------------------
+
+    /// Expand the mailing list [RFC821]
+    /// Command description updated by [RFC5321]
+    EXPN,
+    /// Supply helpful information [RFC821]
+    /// Command description updated by [RFC5321]
+    Help,
+
+    /// SMTP and Submit transport of 8bit MIME content [RFC6152]
+    EightBitMIME,
+
+    /// Message size declaration [RFC1870]
+    Size(u32),
+
+    /// Chunking [RFC3030]
+    Chunking,
+
+    /// Binary MIME [RFC3030]
+    BinaryMIME,
+
+    /// Checkpoint/Restart [RFC1845]
+    Checkpoint,
+
+    /// Deliver By [RFC2852]
+    DeliverBy,
+
+    /// Command Pipelining [RFC2920]
+    Pipelining,
+
+    /// Delivery Status Notification [RFC3461]
+    DSN,
+
+    /// Extended Turn [RFC1985]
+    /// SMTP [RFC5321] only. Not for use on Submit port 587.
+    ETRN,
+
+    /// Enhanced Status Codes [RFC2034]
+    EnhancedStatusCodes,
+
+    /// Start TLS [RFC3207]
+    StartTLS,
+
+    /// Notification of no soliciting [RFC3865]
+    // NoSoliciting,
+
+    /// Message Tracking [RFC3885]
+    MTRK,
+
+    /// Authenticated TURN [RFC2645]
+    /// SMTP [RFC5321] only. Not for use on Submit port 587.
+    ATRN,
+
+    /// Authentication [RFC4954]
+    Auth(Vec<AuthMechanism>),
+
+    /// Remote Content [RFC4468]
+    /// Submit [RFC6409] only. Not for use with SMTP on port 25.
+    BURL,
+
+    /// Future Message Release [RFC4865]
+    // FutureRelease,
+
+    /// Content Conversion Permission [RFC4141]
+    // ConPerm,
+
+    /// Content Conversion Negotiation [RFC4141]
+    // ConNeg,
+
+    /// Internationalized email address [RFC6531]
+    SMTPUTF8,
+
+    /// Priority Message Handling [RFC6710]
+    // MTPRIORITY,
+
+    /// Require Recipient Valid Since [RFC7293]
+    RRVS,
+
+    /// Require TLS [RFC8689]
+    RequireTLS,
+
+    // Observed ...
+    // TIME,
+    // XACK,
+    // VERP,
+    // VRFY,
+    /// Other
+    Other {
+        keyword: String,
+        params: Vec<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthMechanism {
+    Plain,
+    Login,
+    GSSAPI,
+
+    CramMD5,
+    CramSHA1,
+    ScramMD5,
+    DigestMD5,
+    NTLM,
+
+    Other(String),
+}

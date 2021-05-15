@@ -1,17 +1,19 @@
 use crate::parse::{
-    command::{address_literal, Atom, Domain, Mailbox, Path, Reverse_path, String},
+    address::address_literal,
+    command::{Mailbox, Path, Reverse_path},
     imf::{
         datetime::date_time,
         folding_ws_and_comment::{CFWS, FWS},
         identification::msg_id,
     },
+    Atom, Domain, String,
 };
 /// 4.4.  Trace Information (RFC 5321)
 use abnf_core::streaming::CRLF;
 use nom::{
     branch::alt,
     bytes::streaming::{tag, tag_no_case},
-    combinator::{opt, recognize},
+    combinator::{map_res, opt, recognize},
     multi::many1,
     sequence::tuple,
     IResult,
@@ -145,7 +147,12 @@ pub fn With(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// ID = CFWS "ID" FWS ( Atom / msg-id )
 ///       ; msg-id is defined in RFC 5322 [4]
 pub fn ID(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((CFWS, tag_no_case(b"ID"), FWS, alt((Atom, msg_id))));
+    let parser = tuple((
+        CFWS,
+        tag_no_case(b"ID"),
+        FWS,
+        recognize(alt((recognize(Atom), msg_id))),
+    ));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -154,7 +161,12 @@ pub fn ID(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 /// For = CFWS "FOR" FWS ( Path / Mailbox )
 pub fn For(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((CFWS, tag_no_case(b"FOR"), FWS, alt((Path, Mailbox))));
+    let parser = tuple((
+        CFWS,
+        tag_no_case(b"FOR"),
+        FWS,
+        alt((recognize(Path), Mailbox)),
+    ));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -174,12 +186,8 @@ pub fn Additional_Registered_Clauses(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Link = "TCP" / Addtl-Link
-pub fn Link(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = alt((tag_no_case(b"TCP"), Addtl_Link));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
+pub fn Link(input: &[u8]) -> IResult<&[u8], &str> {
+    alt((map_res(tag_no_case("TCP"), std::str::from_utf8), Addtl_Link))(input)
 }
 
 /// Additional standard names for links are registered with the Internet Assigned Numbers
@@ -187,21 +195,17 @@ pub fn Link(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// SHOULD NOT use unregistered names.
 ///
 /// Addtl-Link = Atom
-pub fn Addtl_Link(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = Atom;
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
+pub fn Addtl_Link(input: &[u8]) -> IResult<&[u8], &str> {
+    Atom(input)
 }
 
 /// Protocol = "ESMTP" / "SMTP" / Attdl-Protocol
-pub fn Protocol(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = alt((tag_no_case(b"ESMTP"), tag_no_case(b"SMTP"), Attdl_Protocol));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
+pub fn Protocol(input: &[u8]) -> IResult<&[u8], &str> {
+    alt((
+        map_res(tag_no_case(b"ESMTP"), std::str::from_utf8),
+        map_res(tag_no_case(b"SMTP"), std::str::from_utf8),
+        Attdl_Protocol,
+    ))(input)
 }
 
 /// Additional standard names for protocols are registered with the Internet Assigned Numbers
@@ -209,10 +213,6 @@ pub fn Protocol(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// use unregistered names.
 ///
 /// Attdl-Protocol = Atom
-pub fn Attdl_Protocol(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = Atom;
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
+pub fn Attdl_Protocol(input: &[u8]) -> IResult<&[u8], &str> {
+    Atom(input)
 }

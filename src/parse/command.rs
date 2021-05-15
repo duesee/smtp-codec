@@ -1,32 +1,24 @@
 use crate::{
-    parse::{
-        address::{General_address_literal, IPv4_address_literal, IPv6_address_literal},
-        base64,
-        imf::atom::is_atext,
-    },
-    types::Command,
+    parse::{address::address_literal, base64, Atom, Domain, Quoted_string, String},
+    types::{Command, Parameter},
 };
-use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, DQUOTE, SP};
+use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, SP};
 use nom::{
     branch::alt,
     bytes::streaming::{tag, tag_no_case, take_while, take_while1, take_while_m_n},
-    combinator::{map_res, opt, recognize},
-    multi::many0,
+    combinator::{map, map_res, opt, recognize, value},
+    multi::separated_list1,
     sequence::{delimited, preceded, tuple},
     IResult,
 };
 
 pub fn command(input: &[u8]) -> IResult<&[u8], Command> {
-    let mut parser = alt((
+    alt((
         helo, ehlo, mail, rcpt, data, rset, vrfy, expn, help, noop, quit,
         starttls,   // Extensions
         auth_login, // https://interoperability.blob.core.windows.net/files/MS-XLOGIN/[MS-XLOGIN].pdf
         auth_plain, // RFC 4616
-    ));
-
-    let (remaining, parsed) = parser(input)?;
-
-    Ok((remaining, parsed))
+    ))(input)
 }
 
 /// helo = "HELO" SP Domain CRLF
@@ -83,9 +75,47 @@ pub fn mail(input: &[u8]) -> IResult<&[u8], Command> {
         remaining,
         Command::Mail {
             reverse_path: data.into(),
-            parameters: maybe_params.map(|params| params.into()),
+            parameters: maybe_params.unwrap_or_default(),
         },
     ))
+}
+
+/// Mail-parameters = esmtp-param *(SP esmtp-param)
+pub fn Mail_parameters(input: &[u8]) -> IResult<&[u8], Vec<Parameter>> {
+    separated_list1(SP, esmtp_param)(input)
+}
+
+/// esmtp-param = esmtp-keyword ["=" esmtp-value]
+pub fn esmtp_param(input: &[u8]) -> IResult<&[u8], Parameter> {
+    map(
+        tuple((esmtp_keyword, opt(preceded(tag(b"="), esmtp_value)))),
+        |(keyword, value)| Parameter::new(keyword, value),
+    )(input)
+}
+
+/// esmtp-keyword = (ALPHA / DIGIT) *(ALPHA / DIGIT / "-")
+pub fn esmtp_keyword(input: &[u8]) -> IResult<&[u8], &str> {
+    let parser = tuple((
+        take_while_m_n(1, 1, |byte| is_ALPHA(byte) || is_DIGIT(byte)),
+        take_while(|byte| is_ALPHA(byte) || is_DIGIT(byte) || byte == b'-'),
+    ));
+
+    let (remaining, parsed) = map_res(recognize(parser), std::str::from_utf8)(input)?;
+
+    Ok((remaining, parsed))
+}
+
+/// Any CHAR excluding "=", SP, and control characters.
+/// If this string is an email address, i.e., a Mailbox,
+/// then the "xtext" syntax [32] SHOULD be used.
+///
+/// esmtp-value = 1*(%d33-60 / %d62-126)
+pub fn esmtp_value(input: &[u8]) -> IResult<&[u8], &str> {
+    fn is_value_character(byte: u8) -> bool {
+        matches!(byte, 33..=60 | 62..=126)
+    }
+
+    map_res(take_while1(is_value_character), std::str::from_utf8)(input)
 }
 
 /// rcpt = "RCPT TO:" ( "<Postmaster@" Domain ">" / "<Postmaster>" / Forward-path ) [SP Rcpt-parameters] CRLF
@@ -98,8 +128,11 @@ pub fn rcpt(input: &[u8]) -> IResult<&[u8], Command> {
         tag_no_case(b"RCPT TO:"),
         opt(SP), // Out-of-Spec, but Outlook does it ...
         alt((
-            recognize(tuple((tag_no_case(b"<Postmaster@"), Domain, tag(b">")))),
-            tag_no_case(b"<Postmaster>"),
+            map_res(
+                recognize(tuple((tag_no_case("<Postmaster@"), Domain, tag(">")))),
+                std::str::from_utf8,
+            ),
+            map_res(tag_no_case("<Postmaster>"), std::str::from_utf8),
             Forward_path,
         )),
         opt(preceded(SP, Rcpt_parameters)),
@@ -112,27 +145,24 @@ pub fn rcpt(input: &[u8]) -> IResult<&[u8], Command> {
         remaining,
         Command::Rcpt {
             forward_path: data.into(),
-            parameters: maybe_params.map(|params| params.into()),
+            parameters: maybe_params.unwrap_or_default(),
         },
     ))
 }
 
+/// Rcpt-parameters = esmtp-param *(SP esmtp-param)
+pub fn Rcpt_parameters(input: &[u8]) -> IResult<&[u8], Vec<Parameter>> {
+    separated_list1(SP, esmtp_param)(input)
+}
+
 /// data = "DATA" CRLF
 pub fn data(input: &[u8]) -> IResult<&[u8], Command> {
-    let mut parser = tuple((tag_no_case(b"DATA"), CRLF));
-
-    let (remaining, _) = parser(input)?;
-
-    Ok((remaining, Command::Data))
+    value(Command::Data, tuple((tag_no_case(b"DATA"), CRLF)))(input)
 }
 
 /// rset = "RSET" CRLF
 pub fn rset(input: &[u8]) -> IResult<&[u8], Command> {
-    let mut parser = tuple((tag_no_case(b"RSET"), CRLF));
-
-    let (remaining, _) = parser(input)?;
-
-    Ok((remaining, Command::Rset))
+    value(Command::Rset, tuple((tag_no_case(b"RSET"), CRLF)))(input)
 }
 
 /// vrfy = "VRFY" SP String CRLF
@@ -144,7 +174,7 @@ pub fn vrfy(input: &[u8]) -> IResult<&[u8], Command> {
     Ok((
         remaining,
         Command::Vrfy {
-            user_or_mailbox: data.into(),
+            user_or_mailbox: data,
         },
     ))
 }
@@ -155,12 +185,7 @@ pub fn expn(input: &[u8]) -> IResult<&[u8], Command> {
 
     let (remaining, (_, _, data, _)) = parser(input)?;
 
-    Ok((
-        remaining,
-        Command::Expn {
-            mailing_list: data.into(),
-        },
-    ))
+    Ok((remaining, Command::Expn { mailing_list: data }))
 }
 
 /// help = "HELP" [ SP String ] CRLF
@@ -172,7 +197,7 @@ pub fn help(input: &[u8]) -> IResult<&[u8], Command> {
     Ok((
         remaining,
         Command::Help {
-            argument: maybe_data.map(|data| data.into()),
+            argument: maybe_data,
         },
     ))
 }
@@ -186,26 +211,18 @@ pub fn noop(input: &[u8]) -> IResult<&[u8], Command> {
     Ok((
         remaining,
         Command::Noop {
-            argument: maybe_data.map(|data| data.into()),
+            argument: maybe_data,
         },
     ))
 }
 
 /// quit = "QUIT" CRLF
 pub fn quit(input: &[u8]) -> IResult<&[u8], Command> {
-    let mut parser = tuple((tag_no_case(b"QUIT"), CRLF));
-
-    let (remaining, _) = parser(input)?;
-
-    Ok((remaining, Command::Quit))
+    value(Command::Quit, tuple((tag_no_case(b"QUIT"), CRLF)))(input)
 }
 
 pub fn starttls(input: &[u8]) -> IResult<&[u8], Command> {
-    let mut parser = tuple((tag_no_case(b"STARTTLS"), CRLF));
-
-    let (remaining, _) = parser(input)?;
-
-    Ok((remaining, Command::StartTLS))
+    value(Command::StartTLS, tuple((tag_no_case(b"STARTTLS"), CRLF)))(input)
 }
 
 /// https://interoperability.blob.core.windows.net/files/MS-XLOGIN/[MS-XLOGIN].pdf
@@ -256,35 +273,25 @@ pub fn auth_plain(input: &[u8]) -> IResult<&[u8], Command> {
 // ----- 4.1.2.  Command Argument Syntax (RFC 5321) -----
 
 /// Reverse-path = Path / "<>"
-pub fn Reverse_path(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = alt((Path, tag(b"<>")));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
+pub fn Reverse_path(input: &[u8]) -> IResult<&[u8], &str> {
+    alt((Path, value("", tag("<>"))))(input)
 }
 
 /// Forward-path = Path
-pub fn Forward_path(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = Path;
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
+pub fn Forward_path(input: &[u8]) -> IResult<&[u8], &str> {
+    Path(input)
 }
 
 // Path = "<" [ A-d-l ":" ] Mailbox ">"
-pub fn Path(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((
+pub fn Path(input: &[u8]) -> IResult<&[u8], &str> {
+    delimited(
         tag(b"<"),
-        opt(tuple((A_d_l, tag(b":")))),
-        Mailbox,
+        map_res(
+            recognize(tuple((opt(tuple((A_d_l, tag(b":")))), Mailbox))),
+            std::str::from_utf8,
+        ),
         tag(b">"),
-    ));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
+    )(input)
 }
 
 /// A-d-l = At-domain *( "," At-domain )
@@ -292,7 +299,7 @@ pub fn Path(input: &[u8]) -> IResult<&[u8], &[u8]> {
 ///          ; route", MUST BE accepted, SHOULD NOT be
 ///          ; generated, and SHOULD be ignored.
 pub fn A_d_l(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((At_domain, many0(tuple((tag(b","), At_domain)))));
+    let parser = separated_list1(tag(b","), At_domain);
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -304,133 +311,6 @@ pub fn At_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = tuple((tag(b"@"), Domain));
 
     let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// Mail-parameters = esmtp-param *(SP esmtp-param)
-pub fn Mail_parameters(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((esmtp_param, many0(tuple((SP, esmtp_param)))));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// Rcpt-parameters = esmtp-param *(SP esmtp-param)
-pub fn Rcpt_parameters(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((esmtp_param, many0(tuple((SP, esmtp_param)))));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// esmtp-param = esmtp-keyword ["=" esmtp-value]
-pub fn esmtp_param(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((esmtp_keyword, opt(tuple((tag(b"="), esmtp_value)))));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// esmtp-keyword = (ALPHA / DIGIT) *(ALPHA / DIGIT / "-")
-pub fn esmtp_keyword(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((
-        take_while_m_n(1, 1, |byte| is_ALPHA(byte) || is_DIGIT(byte)),
-        take_while(|byte| is_ALPHA(byte) || is_DIGIT(byte) || byte == b'-'),
-    ));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// Any CHAR excluding "=", SP, and control characters.
-/// If this string is an email address, i.e., a Mailbox,
-/// then the "xtext" syntax [32] SHOULD be used.
-///
-/// esmtp-value = 1*(%d33-60 / %d62-126)
-pub fn esmtp_value(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    fn is_value_character(byte: u8) -> bool {
-        matches!(byte, 33..=60 | 62..=126)
-    }
-
-    take_while1(is_value_character)(input)
-}
-
-/// Keyword = Ldh-str
-pub fn Keyword(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = Ldh_str;
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// Argument = Atom
-pub fn Argument(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    Atom(input)
-}
-
-/// Domain = sub-domain *("." sub-domain)
-pub fn Domain(input: &[u8]) -> IResult<&[u8], &str> {
-    let parser = tuple((sub_domain, many0(tuple((tag(b"."), sub_domain)))));
-
-    let (remaining, parsed) = map_res(recognize(parser), std::str::from_utf8)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// sub-domain = Let-dig [Ldh-str]
-pub fn sub_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((take_while_m_n(1, 1, is_Let_dig), opt(Ldh_str)));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// Let-dig = ALPHA / DIGIT
-pub fn is_Let_dig(byte: u8) -> bool {
-    is_ALPHA(byte) || is_DIGIT(byte)
-}
-
-/// Ldh-str = *( ALPHA / DIGIT / "-" ) Let-dig
-pub fn Ldh_str(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = many0(alt((
-        take_while_m_n(1, 1, is_ALPHA),
-        take_while_m_n(1, 1, is_DIGIT),
-        recognize(tuple((tag(b"-"), take_while_m_n(1, 1, is_Let_dig)))),
-    )));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// address-literal = "[" (
-///                       IPv4-address-literal /
-///                       IPv6-address-literal /
-///                       General-address-literal
-///                   ) "]"
-///                     ; See Section 4.1.3
-pub fn address_literal(input: &[u8]) -> IResult<&[u8], &str> {
-    let mut parser = delimited(
-        tag(b"["),
-        map_res(
-            alt((
-                IPv4_address_literal,
-                IPv6_address_literal,
-                General_address_literal,
-            )),
-            std::str::from_utf8,
-        ),
-        tag(b"]"),
-    );
-
-    let (remaining, parsed) = parser(input)?;
 
     Ok((remaining, parsed))
 }
@@ -447,88 +327,33 @@ pub fn Mailbox(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// Local-part = Dot-string / Quoted-string
 ///               ; MAY be case-sensitive
 pub fn Local_part(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = alt((Dot_string, Quoted_string));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
+    alt((recognize(Dot_string), recognize(Quoted_string)))(input)
 }
 
 /// Dot-string = Atom *("."  Atom)
-pub fn Dot_string(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((Atom, many0(tuple((tag(b"."), Atom)))));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
+pub fn Dot_string(input: &[u8]) -> IResult<&[u8], &str> {
+    map_res(
+        recognize(separated_list1(tag(b"."), Atom)),
+        std::str::from_utf8,
+    )(input)
 }
 
-/// Atom = 1*atext
-pub fn Atom(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    take_while1(is_atext)(input)
-}
+// Not used?
+/// Keyword = Ldh-str
+//pub fn Keyword(input: &[u8]) -> IResult<&[u8], &[u8]> {
+//    Ldh_str(input)
+//}
 
-/// Quoted-string = DQUOTE *QcontentSMTP DQUOTE
-pub fn Quoted_string(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = delimited(DQUOTE, many0(QcontentSMTP), DQUOTE);
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// QcontentSMTP = qtextSMTP / quoted-pairSMTP
-pub fn QcontentSMTP(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = alt((take_while_m_n(1, 1, is_qtextSMTP), quoted_pairSMTP));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// Backslash followed by any ASCII graphic (including itself) or SPace
-///
-/// quoted-pairSMTP = %d92 %d32-126
-pub fn quoted_pairSMTP(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    fn is_ascii_bs_or_sp(byte: u8) -> bool {
-        matches!(byte, 32..=126)
-    }
-
-    let parser = tuple((tag("\\"), take_while_m_n(1, 1, is_ascii_bs_or_sp)));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// Within a quoted string, any ASCII graphic or space is permitted
-/// without blackslash-quoting except double-quote and the backslash itself.
-///
-/// qtextSMTP = %d32-33 / %d35-91 / %d93-126
-pub fn is_qtextSMTP(byte: u8) -> bool {
-    matches!(byte, 32..=33 | 35..=91 | 93..=126)
-}
-
-/// String = Atom / Quoted-string
-pub fn String(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = alt((Atom, Quoted_string));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
+// Not used?
+/// Argument = Atom
+//pub fn Argument(input: &[u8]) -> IResult<&[u8], &[u8]> {
+//    Atom(input)
+//}
 
 #[cfg(test)]
 mod test {
-    use super::{ehlo, helo, mail, sub_domain};
+    use super::{ehlo, helo, mail};
     use crate::types::Command;
-
-    #[test]
-    fn test_subdomain() {
-        let (rem, parsed) = sub_domain(b"example???").unwrap();
-        assert_eq!(parsed, b"example");
-        assert_eq!(rem, b"???");
-    }
 
     #[test]
     fn test_ehlo() {
@@ -536,7 +361,7 @@ mod test {
         assert_eq!(
             parsed,
             Command::Ehlo {
-                fqdn_or_address_literal: b"123.123.123.123".to_vec()
+                fqdn_or_address_literal: "123.123.123.123".into()
             }
         );
         assert_eq!(rem, b"???");
@@ -548,7 +373,7 @@ mod test {
         assert_eq!(
             parsed,
             Command::Helo {
-                fqdn_or_address_literal: b"example.com".to_vec()
+                fqdn_or_address_literal: "example.com".into()
             }
         );
         assert_eq!(rem, b"???");
@@ -560,8 +385,8 @@ mod test {
         assert_eq!(
             parsed,
             Command::Mail {
-                reverse_path: b"<userx@y.foo.org>".to_vec(),
-                parameters: None
+                reverse_path: "userx@y.foo.org".into(),
+                parameters: Vec::default(),
             }
         );
         assert_eq!(rem, b"???");
