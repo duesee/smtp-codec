@@ -282,6 +282,45 @@ pub struct EhloOkResp {
     pub lines: Vec<Capability>,
 }
 
+impl EhloOkResp {
+    pub fn new<D, G>(domain: D, greet: Option<G>, capabilities: Vec<Capability>) -> EhloOkResp
+    where
+        D: Into<String>,
+        G: Into<String>,
+    {
+        EhloOkResp {
+            domain: domain.into(),
+            greet: greet.map(|inner| inner.into()),
+            lines: capabilities,
+        }
+    }
+
+    pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        let greet = match self.greet {
+            Some(ref greet) => format!(" {}", greet),
+            None => "".to_string(),
+        };
+
+        if let Some((tail, head)) = self.lines.split_last() {
+            writer.write_all(format!("250-{}{}\r\n", self.domain, greet).as_bytes())?;
+
+            for capability in head {
+                writer.write_all(b"250-")?;
+                capability.serialize(writer)?;
+                writer.write_all(b"\r\n")?;
+            }
+
+            writer.write_all(b"250 ")?;
+            tail.serialize(writer)?;
+            writer.write_all(b"\r\n")
+        } else {
+            writer.write_all(format!("250 {}{}\r\n", self.domain, greet).as_bytes())
+        }
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Capability {
     // Send as mail [RFC821]
