@@ -408,6 +408,61 @@ pub enum Capability {
     },
 }
 
+impl Capability {
+    pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        match self {
+            Capability::EXPN => writer.write_all(b"EXPN"),
+            Capability::Help => writer.write_all(b"HELP"),
+            Capability::EightBitMIME => writer.write_all(b"8BITMIME"),
+            Capability::Size(number) => writer.write_all(format!("SIZE {}", number).as_bytes()),
+            Capability::Chunking => writer.write_all(b"CHUNKING"),
+            Capability::BinaryMIME => writer.write_all(b"BINARYMIME"),
+            Capability::Checkpoint => writer.write_all(b"CHECKPOINT"),
+            Capability::DeliverBy => writer.write_all(b"DELIVERBY"),
+            Capability::Pipelining => writer.write_all(b"PIPELINING"),
+            Capability::DSN => writer.write_all(b"DSN"),
+            Capability::ETRN => writer.write_all(b"ETRN"),
+            Capability::EnhancedStatusCodes => writer.write_all(b"ENHANCEDSTATUSCODES"),
+            Capability::StartTLS => writer.write_all(b"STARTTLS"),
+            Capability::MTRK => writer.write_all(b"MTRK"),
+            Capability::ATRN => writer.write_all(b"ATRN"),
+            Capability::Auth(mechanisms) => {
+                if let Some((tail, head)) = mechanisms.split_last() {
+                    writer.write_all(b"AUTH ")?;
+
+                    for mechanism in head {
+                        mechanism.serialize(writer)?;
+                        writer.write_all(b" ")?;
+                    }
+
+                    tail.serialize(writer)
+                } else {
+                    writer.write_all(b"AUTH")
+                }
+            }
+            Capability::BURL => writer.write_all(b"BURL"),
+            Capability::SMTPUTF8 => writer.write_all(b"SMTPUTF8"),
+            Capability::RRVS => writer.write_all(b"RRVS"),
+            Capability::RequireTLS => writer.write_all(b"REQUIRETLS"),
+            Capability::Other { keyword, params } => {
+                if let Some((tail, head)) = params.split_last() {
+                    writer.write_all(keyword.as_bytes())?;
+                    writer.write_all(b" ")?;
+
+                    for param in head {
+                        writer.write_all(param.as_bytes())?;
+                        writer.write_all(b" ")?;
+                    }
+
+                    writer.write_all(tail.as_bytes())
+                } else {
+                    writer.write_all(keyword.as_bytes())
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthMechanism {
     Plain,
@@ -421,4 +476,22 @@ pub enum AuthMechanism {
     NTLM,
 
     Other(String),
+}
+
+impl AuthMechanism {
+    pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        match self {
+            AuthMechanism::Plain => writer.write_all(b"PLAIN"),
+            AuthMechanism::Login => writer.write_all(b"LOGIN"),
+            AuthMechanism::GSSAPI => writer.write_all(b"GSSAPI"),
+
+            AuthMechanism::CramMD5 => writer.write_all(b"CRAM-MD5"),
+            AuthMechanism::CramSHA1 => writer.write_all(b"CRAM-SHA1"),
+            AuthMechanism::ScramMD5 => writer.write_all(b"SCRAM-MD5"),
+            AuthMechanism::DigestMD5 => writer.write_all(b"DIGEST-MD5"),
+            AuthMechanism::NTLM => writer.write_all(b"NTLM"),
+
+            AuthMechanism::Other(other) => writer.write_all(other.as_bytes()),
+        }
+    }
 }
