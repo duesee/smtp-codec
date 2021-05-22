@@ -1,4 +1,6 @@
 use crate::utils::escape_quoted;
+#[cfg(feature = "serdex")]
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -321,6 +323,7 @@ impl EhloOkResp {
 
 // -------------------------------------------------------------------------------------------------
 
+#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Capability {
     // Send as mail [RFC821]
@@ -502,6 +505,7 @@ impl Capability {
     }
 }
 
+#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthMechanism {
     Plain,

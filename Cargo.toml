@@ -10,6 +10,13 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+serdex  = ["serde"]
+
 [dependencies]
 nom = "6"
 abnf-core = "0.4.0"
+
+# Optional
+serde = { version = "1.0", features = ["derive"], optional = true }
