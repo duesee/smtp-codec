@@ -1,6 +1,6 @@
 use crate::{
     parse::{address::address_literal, number, Domain},
-    types::{AuthMechanism, Capability, EhloOkResp, Greeting as GreetingType},
+    types::{AuthMechanism, Capability, Response},
 };
 use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, SP};
 use nom::{
@@ -16,7 +16,7 @@ use nom::{
 ///            ( "220-" (Domain / address-literal) [ SP textstring ] CRLF
 ///           *( "220-" [ textstring ] CRLF )
 ///              "220" [ SP textstring ] CRLF )
-pub fn Greeting(input: &[u8]) -> IResult<&[u8], GreetingType> {
+pub fn Greeting(input: &[u8]) -> IResult<&[u8], Response> {
     let mut parser = alt((
         map(
             tuple((
@@ -25,7 +25,7 @@ pub fn Greeting(input: &[u8]) -> IResult<&[u8], GreetingType> {
                 opt(preceded(SP, textstring)),
                 CRLF,
             )),
-            |(_, domain, maybe_text, _)| GreetingType {
+            |(_, domain, maybe_text, _)| Response::Greeting {
                 domain: domain.to_owned(),
                 text: maybe_text
                     .map(|str| str.to_string())
@@ -43,7 +43,7 @@ pub fn Greeting(input: &[u8]) -> IResult<&[u8], GreetingType> {
                 opt(preceded(SP, textstring)),
                 CRLF,
             )),
-            |(_, domain, maybe_text, _, more_text, _, moar_text, _)| GreetingType {
+            |(_, domain, maybe_text, _, more_text, _, moar_text, _)| Response::Greeting {
                 domain: domain.to_owned(),
                 text: {
                     let mut res = maybe_text
@@ -88,20 +88,53 @@ pub fn textstring(input: &[u8]) -> IResult<&[u8], &str> {
 
 // -------------------------------------------------------------------------------------------------
 
+/// Reply-line = *( Reply-code "-" [ textstring ] CRLF )
+///                 Reply-code [ SP textstring ] CRLF
+pub fn Reply_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((
+        many0(tuple((Reply_code, tag(b"-"), opt(textstring), CRLF))),
+        Reply_code,
+        opt(tuple((SP, textstring))),
+        CRLF,
+    ));
+
+    let (remaining, parsed) = recognize(parser)(input)?;
+
+    Ok((remaining, parsed))
+}
+
+/// Reply-code = %x32-35 %x30-35 %x30-39
+///
+///   2345
+/// 012345
+/// 0123456789
+pub fn Reply_code(input: &[u8]) -> IResult<&[u8], u16> {
+    // FIXME: do not accept all codes.
+    map_res(
+        map_res(
+            take_while_m_n(3, 3, nom::character::is_digit),
+            std::str::from_utf8,
+        ),
+        |s| u16::from_str_radix(s, 10),
+    )(input)
+}
+
+// -------------------------------------------------------------------------------------------------
+
 /// ehlo-ok-rsp = ( "250 " Domain [ SP ehlo-greet ] CRLF ) /
 ///               ( "250-" Domain [ SP ehlo-greet ] CRLF
 ///              *( "250-" ehlo-line CRLF )
 ///                 "250 " ehlo-line CRLF )
 ///
 /// Edit: collapsed ("250" SP) to ("250 ")
-pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], EhloOkResp> {
+pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], Response> {
     let mut parser = alt((
         map(
             tuple((tag(b"250 "), Domain, opt(preceded(SP, ehlo_greet)), CRLF)),
-            |(_, domain, maybe_ehlo, _)| EhloOkResp {
+            |(_, domain, maybe_ehlo, _)| Response::Ehlo {
                 domain: domain.to_owned(),
                 greet: maybe_ehlo.map(|ehlo| ehlo.to_owned()),
-                lines: Vec::new(),
+                capabilities: Vec::new(),
             },
         ),
         map(
@@ -115,10 +148,10 @@ pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], EhloOkResp> {
                 ehlo_line,
                 CRLF,
             )),
-            |(_, domain, maybe_ehlo, _, mut lines, _, line, _)| EhloOkResp {
+            |(_, domain, maybe_ehlo, _, mut lines, _, line, _)| Response::Ehlo {
                 domain: domain.to_owned(),
                 greet: maybe_ehlo.map(|ehlo| ehlo.to_owned()),
-                lines: {
+                capabilities: {
                     lines.push(line);
                     lines
                 },
@@ -240,37 +273,6 @@ pub fn auth_mechanism(input: &[u8]) -> IResult<&[u8], AuthMechanism> {
 
 // -------------------------------------------------------------------------------------------------
 
-/// Reply-line = *( Reply-code "-" [ textstring ] CRLF )
-///                 Reply-code [ SP textstring ] CRLF
-pub fn Reply_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((
-        many0(tuple((Reply_code, tag(b"-"), opt(textstring), CRLF))),
-        Reply_code,
-        opt(tuple((SP, textstring))),
-        CRLF,
-    ));
-
-    let (remaining, parsed) = recognize(parser)(input)?;
-
-    Ok((remaining, parsed))
-}
-
-/// Reply-code = %x32-35 %x30-35 %x30-39
-///
-///   2345
-/// 012345
-/// 0123456789
-pub fn Reply_code(input: &[u8]) -> IResult<&[u8], u16> {
-    // FIXME: do not accept all codes.
-    map_res(
-        map_res(
-            take_while_m_n(3, 3, nom::character::is_digit),
-            std::str::from_utf8,
-        ),
-        |s| u16::from_str_radix(s, 10),
-    )(input)
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -286,7 +288,7 @@ mod test {
         assert_eq!(rem, b"");
         assert_eq!(
             out,
-            GreetingType {
+            Response::Greeting {
                 domain: "example.org".into(),
                 text: "ESMTP Fake 4.93 #2 Thu, 16 Jul 2020 07:30:16 -0400\n\
 We do not authorize the use of this system to transport unsolicited,\n\
@@ -310,10 +312,10 @@ and/or bulk e-mail."
         assert_eq!(rem, b"");
         assert_eq!(
             out,
-            EhloOkResp {
+            Response::Ehlo {
                 domain: "example.org".into(),
                 greet: Some("hello".into()),
-                lines: vec![
+                capabilities: vec![
                     Capability::Auth(vec![
                         AuthMechanism::Login,
                         AuthMechanism::CramMD5,

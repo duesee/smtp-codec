@@ -269,55 +269,121 @@ impl AtomOrQuoted {
 
 // -------------------------------------------------------------------------------------------------
 
+#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Greeting {
-    pub domain: String,
-    // TODO: Vec<Option<String>> would be closer to the SMTP ABNF.
-    // What is wrong with you, SMTP?
-    pub text: String,
+pub enum Response {
+    Greeting {
+        domain: String,
+        text: String,
+    },
+    Ehlo {
+        domain: String,
+        greet: Option<String>,
+        capabilities: Vec<Capability>,
+    },
+    Other {
+        code: u16,
+        text: String,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EhloOkResp {
-    pub domain: String,
-    pub greet: Option<String>,
-    pub lines: Vec<Capability>,
-}
+impl Response {
+    pub fn greeting<D, T>(domain: D, text: T) -> Response
+    where
+        D: Into<String>,
+        T: Into<String>,
+    {
+        Response::Greeting {
+            domain: domain.into(),
+            text: text.into(),
+        }
+    }
 
-impl EhloOkResp {
-    pub fn new<D, G>(domain: D, greet: Option<G>, capabilities: Vec<Capability>) -> EhloOkResp
+    pub fn ehlo<D, G>(domain: D, greet: Option<G>, capabilities: Vec<Capability>) -> Response
     where
         D: Into<String>,
         G: Into<String>,
     {
-        EhloOkResp {
+        Response::Ehlo {
             domain: domain.into(),
-            greet: greet.map(|inner| inner.into()),
-            lines: capabilities,
+            greet: greet.map(Into::into),
+            capabilities,
+        }
+    }
+
+    pub fn other<T>(code: u16, text: T) -> Response
+    where
+        T: Into<String>,
+    {
+        Response::Other {
+            code,
+            text: text.into(),
         }
     }
 
     pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
-        let greet = match self.greet {
-            Some(ref greet) => format!(" {}", greet),
-            None => "".to_string(),
-        };
+        match self {
+            Response::Greeting { domain, text } => {
+                let lines = text.lines().collect::<Vec<_>>();
 
-        if let Some((tail, head)) = self.lines.split_last() {
-            writer.write_all(format!("250-{}{}\r\n", self.domain, greet).as_bytes())?;
+                if let Some((first, tail)) = lines.split_first() {
+                    if let Some((last, head)) = tail.split_last() {
+                        write!(writer, "220-{} {}\r\n", domain, first)?;
 
-            for capability in head {
-                writer.write_all(b"250-")?;
-                capability.serialize(writer)?;
-                writer.write_all(b"\r\n")?;
+                        for line in head {
+                            write!(writer, "220-{}\r\n", line)?;
+                        }
+
+                        write!(writer, "220 {}\r\n", last)?;
+                    } else {
+                        write!(writer, "220 {} {}\r\n", domain, first)?;
+                    }
+                } else {
+                    write!(writer, "220 {}\r\n", domain)?;
+                }
             }
+            Response::Ehlo {
+                domain,
+                greet,
+                capabilities,
+            } => {
+                let greet = match greet {
+                    Some(greet) => format!(" {}", greet),
+                    None => "".to_string(),
+                };
 
-            writer.write_all(b"250 ")?;
-            tail.serialize(writer)?;
-            writer.write_all(b"\r\n")
-        } else {
-            writer.write_all(format!("250 {}{}\r\n", self.domain, greet).as_bytes())
+                if let Some((tail, head)) = capabilities.split_last() {
+                    writer.write_all(format!("250-{}{}\r\n", domain, greet).as_bytes())?;
+
+                    for capability in head {
+                        writer.write_all(b"250-")?;
+                        capability.serialize(writer)?;
+                        writer.write_all(b"\r\n")?;
+                    }
+
+                    writer.write_all(b"250 ")?;
+                    tail.serialize(writer)?;
+                    writer.write_all(b"\r\n")?;
+                } else {
+                    writer.write_all(format!("250 {}{}\r\n", domain, greet).as_bytes())?;
+                }
+            }
+            Response::Other { code, text } => {
+                let lines = text.lines().collect::<Vec<_>>();
+
+                if let Some((last, head)) = lines.split_last() {
+                    for line in head {
+                        write!(writer, "{}-{}\r\n", code, line)?;
+                    }
+
+                    write!(writer, "{} {}\r\n", code, last)?;
+                } else {
+                    write!(writer, "{}\r\n", code)?;
+                }
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -535,6 +601,128 @@ impl AuthMechanism {
             AuthMechanism::NTLM => writer.write_all(b"NTLM"),
 
             AuthMechanism::Other(other) => writer.write_all(other.as_bytes()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::types::{Capability, Response};
+
+    #[test]
+    fn test_serialize_greeting() {
+        let tests = &[
+            (
+                Response::Greeting {
+                    domain: "example.org".into(),
+                    text: "".into(),
+                },
+                b"220 example.org\r\n".as_ref(),
+            ),
+            (
+                Response::Greeting {
+                    domain: "example.org".into(),
+                    text: "A".into(),
+                },
+                b"220 example.org A\r\n".as_ref(),
+            ),
+            (
+                Response::Greeting {
+                    domain: "example.org".into(),
+                    text: "A\nB".into(),
+                },
+                b"220-example.org A\r\n220 B\r\n".as_ref(),
+            ),
+            (
+                Response::Greeting {
+                    domain: "example.org".into(),
+                    text: "A\nB\nC".into(),
+                },
+                b"220-example.org A\r\n220-B\r\n220 C\r\n".as_ref(),
+            ),
+        ];
+
+        for (test, expected) in tests.into_iter() {
+            let mut got = Vec::new();
+            test.serialize(&mut got).unwrap();
+            assert_eq!(expected, &got);
+        }
+    }
+
+    #[test]
+    fn test_serialize_ehlo() {
+        let tests = &[
+            (
+                Response::Ehlo {
+                    domain: "example.org".into(),
+                    greet: None,
+                    capabilities: vec![],
+                },
+                b"250 example.org\r\n".as_ref(),
+            ),
+            (
+                Response::Ehlo {
+                    domain: "example.org".into(),
+                    greet: Some("...".into()),
+                    capabilities: vec![],
+                },
+                b"250 example.org ...\r\n".as_ref(),
+            ),
+            (
+                Response::Ehlo {
+                    domain: "example.org".into(),
+                    greet: Some("...".into()),
+                    capabilities: vec![Capability::StartTLS],
+                },
+                b"250-example.org ...\r\n250 STARTTLS\r\n".as_ref(),
+            ),
+            (
+                Response::Ehlo {
+                    domain: "example.org".into(),
+                    greet: Some("...".into()),
+                    capabilities: vec![Capability::StartTLS, Capability::Size(12345)],
+                },
+                b"250-example.org ...\r\n250-STARTTLS\r\n250 SIZE 12345\r\n".as_ref(),
+            ),
+        ];
+
+        for (test, expected) in tests.into_iter() {
+            let mut got = Vec::new();
+            test.serialize(&mut got).unwrap();
+            assert_eq!(expected, &got);
+        }
+    }
+
+    #[test]
+    fn test_serialize_other() {
+        let tests = &[
+            (
+                Response::Other {
+                    code: 333,
+                    text: "".into(),
+                },
+                b"333\r\n".as_ref(),
+            ),
+            (
+                Response::Other {
+                    code: 333,
+                    text: "A".into(),
+                },
+                b"333 A\r\n".as_ref(),
+            ),
+            (
+                Response::Other {
+                    code: 333,
+                    text: "A\nB".into(),
+                },
+                b"333-A\r\n333 B\r\n".as_ref(),
+            ),
+        ];
+
+        for (test, expected) in tests.into_iter() {
+            let mut got = Vec::new();
+            test.serialize(&mut got).unwrap();
+            assert_eq!(expected, &got);
         }
     }
 }
