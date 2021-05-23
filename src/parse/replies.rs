@@ -108,9 +108,15 @@ pub fn Reply_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
 ///   2345
 /// 012345
 /// 0123456789
-pub fn Reply_code(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn Reply_code(input: &[u8]) -> IResult<&[u8], u16> {
     // FIXME: do not accept all codes.
-    take_while_m_n(3, 3, nom::character::is_digit)(input)
+    map_res(
+        map_res(
+            take_while_m_n(3, 3, nom::character::is_digit),
+            std::str::from_utf8,
+        ),
+        |s| u16::from_str_radix(s, 10),
+    )(input)
 }
 
 #[cfg(test)]
