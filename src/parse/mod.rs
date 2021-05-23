@@ -16,7 +16,6 @@ use std::{borrow::Cow, str::from_utf8};
 pub mod address;
 pub mod command;
 pub mod imf;
-pub mod replies;
 pub mod response;
 pub mod trace;
 pub mod utils;
