@@ -16,8 +16,8 @@ use nom::{
 
 /// Greeting = ( "220 " (Domain / address-literal) [ SP textstring ] CRLF ) /
 ///            ( "220-" (Domain / address-literal) [ SP textstring ] CRLF
-///            *( "220-" [ textstring ] CRLF )
-///            "220" [ SP textstring ] CRLF )
+///           *( "220-" [ textstring ] CRLF )
+///              "220" [ SP textstring ] CRLF )
 pub fn Greeting(input: &[u8]) -> IResult<&[u8], GreetingType> {
     let mut parser = alt((
         map(
@@ -89,7 +89,7 @@ pub fn textstring(input: &[u8]) -> IResult<&[u8], &str> {
 }
 
 /// Reply-line = *( Reply-code "-" [ textstring ] CRLF )
-///              Reply-code [ SP textstring ] CRLF
+///                 Reply-code [ SP textstring ] CRLF
 pub fn Reply_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = tuple((
         many0(tuple((Reply_code, tag(b"-"), opt(textstring), CRLF))),

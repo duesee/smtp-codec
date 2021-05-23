@@ -14,8 +14,8 @@ use nom::{
 
 /// ehlo-ok-rsp = ( "250 " Domain [ SP ehlo-greet ] CRLF ) /
 ///               ( "250-" Domain [ SP ehlo-greet ] CRLF
-///                 *( "250-" ehlo-line CRLF )
-///                    "250 " ehlo-line CRLF )
+///              *( "250-" ehlo-line CRLF )
+///                 "250 " ehlo-line CRLF )
 ///
 /// Edit: collapsed ("250" SP) to ("250 ")
 pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], EhloOkResp> {
