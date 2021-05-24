@@ -1,6 +1,6 @@
 use crate::{
     parse::{address::address_literal, base64, Atom, Domain, Quoted_string, String},
-    types::{Command, Parameter},
+    types::{Command, DomainOrAddress, Parameter},
 };
 use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, SP};
 use nom::{
@@ -26,18 +26,18 @@ pub fn helo(input: &[u8]) -> IResult<&[u8], Command> {
     let mut parser = tuple((
         tag_no_case(b"HELO"),
         SP,
-        alt((Domain, address_literal)), // address_literal alternative for Geary
+        alt((
+            map(Domain, |domain| DomainOrAddress::Domain(domain.into())),
+            map(address_literal, |address| {
+                DomainOrAddress::Address(address.into())
+            }),
+        )),
         CRLF,
     ));
 
-    let (remaining, (_, _, data, _)) = parser(input)?;
+    let (remaining, (_, _, domain_or_address, _)) = parser(input)?;
 
-    Ok((
-        remaining,
-        Command::Helo {
-            fqdn_or_address_literal: data.into(),
-        },
-    ))
+    Ok((remaining, Command::Helo { domain_or_address }))
 }
 
 /// ehlo = "EHLO" SP ( Domain / address-literal ) CRLF
@@ -45,18 +45,18 @@ pub fn ehlo(input: &[u8]) -> IResult<&[u8], Command> {
     let mut parser = tuple((
         tag_no_case(b"EHLO"),
         SP,
-        alt((Domain, address_literal)),
+        alt((
+            map(Domain, |domain| DomainOrAddress::Domain(domain.into())),
+            map(address_literal, |address| {
+                DomainOrAddress::Address(address.into())
+            }),
+        )),
         CRLF,
     ));
 
-    let (remaining, (_, _, data, _)) = parser(input)?;
+    let (remaining, (_, _, domain_or_address, _)) = parser(input)?;
 
-    Ok((
-        remaining,
-        Command::Ehlo {
-            fqdn_or_address_literal: data.into(),
-        },
-    ))
+    Ok((remaining, Command::Ehlo { domain_or_address }))
 }
 
 /// mail = "MAIL FROM:" Reverse-path [SP Mail-parameters] CRLF
@@ -353,7 +353,7 @@ pub fn Dot_string(input: &[u8]) -> IResult<&[u8], &str> {
 #[cfg(test)]
 mod test {
     use super::{ehlo, helo, mail};
-    use crate::types::Command;
+    use crate::types::{Command, DomainOrAddress};
 
     #[test]
     fn test_ehlo() {
@@ -361,7 +361,7 @@ mod test {
         assert_eq!(
             parsed,
             Command::Ehlo {
-                fqdn_or_address_literal: "123.123.123.123".into()
+                domain_or_address: DomainOrAddress::Address("123.123.123.123".into()),
             }
         );
         assert_eq!(rem, b"???");
@@ -373,7 +373,7 @@ mod test {
         assert_eq!(
             parsed,
             Command::Helo {
-                fqdn_or_address_literal: "example.com".into()
+                domain_or_address: DomainOrAddress::Domain("example.com".into()),
             }
         );
         assert_eq!(rem, b"???");

@@ -6,10 +6,10 @@ use std::io::Write;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     Ehlo {
-        fqdn_or_address_literal: String,
+        domain_or_address: DomainOrAddress,
     },
     Helo {
-        fqdn_or_address_literal: String,
+        domain_or_address: DomainOrAddress,
     },
     Mail {
         reverse_path: String,
@@ -93,6 +93,21 @@ pub enum Command {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DomainOrAddress {
+    Domain(String),
+    Address(String),
+}
+
+impl DomainOrAddress {
+    pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        match self {
+            DomainOrAddress::Domain(domain) => write!(writer, "{}", domain),
+            DomainOrAddress::Address(address) => write!(writer, "[{}]", address),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Parameter {
     keyword: String,
     value: Option<String>,
@@ -132,18 +147,14 @@ impl Command {
 
         match self {
             // helo = "HELO" SP Domain CRLF
-            Helo {
-                fqdn_or_address_literal,
-            } => {
+            Helo { domain_or_address } => {
                 writer.write_all(b"HELO ")?;
-                writer.write_all(fqdn_or_address_literal.as_bytes())?;
+                domain_or_address.serialize(writer)?;
             }
             // ehlo = "EHLO" SP ( Domain / address-literal ) CRLF
-            Ehlo {
-                fqdn_or_address_literal,
-            } => {
+            Ehlo { domain_or_address } => {
                 writer.write_all(b"EHLO ")?;
-                writer.write_all(fqdn_or_address_literal.as_bytes())?;
+                domain_or_address.serialize(writer)?;
             }
             // mail = "MAIL FROM:" Reverse-path [SP Mail-parameters] CRLF
             Mail {
