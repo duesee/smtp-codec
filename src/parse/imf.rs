@@ -4,7 +4,6 @@
 
 /// 3.2.1.  Quoted characters
 pub mod quoted_characters {
-    use super::obsolete::obs_qp;
     use abnf_core::streaming::{is_VCHAR, WSP};
     use nom::{
         branch::alt,
@@ -13,6 +12,8 @@ pub mod quoted_characters {
         sequence::tuple,
         IResult,
     };
+
+    use super::obsolete::obs_qp;
 
     /// quoted-pair = ("\" (VCHAR / WSP)) / obs-qp
     pub fn quoted_pair(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -57,7 +58,6 @@ pub mod folding_ws_and_comment {
 
 /// 3.2.3.  Atom
 pub mod atom {
-    use super::folding_ws_and_comment::CFWS;
     use abnf_core::streaming::{is_ALPHA, is_DIGIT};
     use nom::{
         bytes::streaming::{tag, take_while1},
@@ -66,6 +66,8 @@ pub mod atom {
         sequence::tuple,
         IResult,
     };
+
+    use super::folding_ws_and_comment::CFWS;
 
     /// Printable US-ASCII characters not including specials.
     /// Used for atoms.
@@ -131,11 +133,6 @@ pub mod atom {
 
 /// 3.2.4.  Quoted Strings
 pub mod quoted_strings {
-    use super::{
-        folding_ws_and_comment::{CFWS, FWS},
-        obsolete::is_obs_qtext,
-        quoted_characters::quoted_pair,
-    };
     use abnf_core::streaming::DQUOTE;
     use nom::{
         branch::alt,
@@ -144,6 +141,12 @@ pub mod quoted_strings {
         multi::many0,
         sequence::tuple,
         IResult,
+    };
+
+    use super::{
+        folding_ws_and_comment::{CFWS, FWS},
+        obsolete::is_obs_qtext,
+        quoted_characters::quoted_pair,
     };
 
     /// Printable US-ASCII characters not including "\" or the quote character.
@@ -185,8 +188,9 @@ pub mod quoted_strings {
 
 /// 3.2.5.  Miscellaneous Tokens
 pub mod miscellaneous {
-    use super::{atom::atom, quoted_strings::quoted_string};
     use nom::{branch::alt, IResult};
+
+    use super::{atom::atom, quoted_strings::quoted_string};
 
     /// word = atom / quoted-string
     pub fn word(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -202,7 +206,6 @@ pub mod miscellaneous {
 
 /// 3.3.  Date and Time Specification
 pub mod datetime {
-    use super::folding_ws_and_comment::{CFWS, FWS};
     use abnf_core::streaming::is_DIGIT;
     use nom::{
         branch::alt,
@@ -211,6 +214,8 @@ pub mod datetime {
         sequence::tuple,
         IResult,
     };
+
+    use super::folding_ws_and_comment::{CFWS, FWS};
 
     // date-time = [ day-of-week "," ] date time [CFWS]
     pub fn date_time(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -365,12 +370,6 @@ pub mod datetime {
 
 /// 3.4.1.  Addr-Spec Specification
 pub mod addr_spec {
-    use super::{
-        atom::dot_atom,
-        folding_ws_and_comment::{CFWS, FWS},
-        obsolete::{obs_domain, obs_dtext, obs_local_part},
-        quoted_strings::quoted_string,
-    };
     use nom::{
         branch::alt,
         bytes::streaming::{tag, take_while_m_n},
@@ -378,6 +377,13 @@ pub mod addr_spec {
         multi::many0,
         sequence::tuple,
         IResult,
+    };
+
+    use super::{
+        atom::dot_atom,
+        folding_ws_and_comment::{CFWS, FWS},
+        obsolete::{obs_domain, obs_dtext, obs_local_part},
+        quoted_strings::quoted_string,
     };
 
     // addr-spec = local-part "@" domain
@@ -442,12 +448,6 @@ pub mod addr_spec {
 
 /// 3.6.4.  Identification Fields
 pub mod identification {
-    use super::{
-        addr_spec::dtext,
-        atom::dot_atom_text,
-        folding_ws_and_comment::CFWS,
-        obsolete::{obs_id_left, obs_id_right},
-    };
     use nom::{
         branch::alt,
         bytes::streaming::tag,
@@ -455,6 +455,13 @@ pub mod identification {
         multi::many0,
         sequence::{delimited, tuple},
         IResult,
+    };
+
+    use super::{
+        addr_spec::dtext,
+        atom::dot_atom_text,
+        folding_ws_and_comment::CFWS,
+        obsolete::{obs_id_left, obs_id_right},
     };
 
     // message-id = "Message-ID:" msg-id CRLF
@@ -513,12 +520,6 @@ pub mod identification {
 
 /// 4.1.  Miscellaneous Obsolete Tokens
 pub mod obsolete {
-    use super::{
-        addr_spec::{domain, local_part},
-        atom::atom,
-        miscellaneous::word,
-        quoted_characters::quoted_pair,
-    };
     use abnf_core::streaming::{CR, LF};
     use nom::{
         branch::alt,
@@ -527,6 +528,13 @@ pub mod obsolete {
         multi::many0,
         sequence::tuple,
         IResult,
+    };
+
+    use super::{
+        addr_spec::{domain, local_part},
+        atom::atom,
+        miscellaneous::word,
+        quoted_characters::quoted_pair,
     };
 
     /// US-ASCII control characters that do not include the carriage

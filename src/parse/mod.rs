@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
-use crate::{parse::imf::atom::is_atext, types::AtomOrQuoted, utils::unescape_quoted};
+use std::{borrow::Cow, str::from_utf8};
+
 use abnf_core::streaming::{is_ALPHA, is_DIGIT, DQUOTE};
 use nom::{
     branch::alt,
@@ -11,7 +12,8 @@ use nom::{
     sequence::{delimited, tuple},
     IResult,
 };
-use std::{borrow::Cow, str::from_utf8};
+
+use crate::{parse::imf::atom::is_atext, types::AtomOrQuoted, utils::unescape_quoted};
 
 pub mod address;
 pub mod command;

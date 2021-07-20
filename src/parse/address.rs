@@ -1,6 +1,5 @@
 //! 4.1.3.  Address Literals (RFC 5321)
 
-use crate::parse::Ldh_str;
 use abnf_core::streaming::is_DIGIT;
 use nom::{
     branch::alt,
@@ -11,6 +10,8 @@ use nom::{
     sequence::{delimited, tuple},
     IResult,
 };
+
+use crate::parse::Ldh_str;
 
 /// address-literal = "[" (
 ///                       IPv4-address-literal /

@@ -1,7 +1,3 @@
-use crate::{
-    parse::{address::address_literal, number, Domain},
-    types::{AuthMechanism, Capability, Response},
-};
 use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, SP};
 use nom::{
     branch::alt,
@@ -10,6 +6,11 @@ use nom::{
     multi::{many0, separated_list0},
     sequence::{delimited, preceded, tuple},
     IResult,
+};
+
+use crate::{
+    parse::{address::address_literal, number, Domain},
+    types::{AuthMechanism, Capability, Response},
 };
 
 /// Greeting = ( "220 " (Domain / address-literal) [ SP textstring ] CRLF ) /

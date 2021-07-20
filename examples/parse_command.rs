@@ -1,5 +1,6 @@
-use smtp_codec::parse::command::command;
 use std::io::Write;
+
+use smtp_codec::parse::command::command;
 
 fn main() -> std::io::Result<()> {
     let mut args = std::env::args();
