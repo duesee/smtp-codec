@@ -1,7 +1,9 @@
-use crate::utils::escape_quoted;
+use std::io::Write;
+
 #[cfg(feature = "serdex")]
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+
+use crate::utils::escape_quoted;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {

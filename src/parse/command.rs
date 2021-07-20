@@ -1,7 +1,3 @@
-use crate::{
-    parse::{address::address_literal, base64, Atom, Domain, Quoted_string, String},
-    types::{Command, DomainOrAddress, Parameter},
-};
 use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, SP};
 use nom::{
     branch::alt,
@@ -10,6 +6,11 @@ use nom::{
     multi::separated_list1,
     sequence::{delimited, preceded, tuple},
     IResult,
+};
+
+use crate::{
+    parse::{address::address_literal, base64, Atom, Domain, Quoted_string, String},
+    types::{Command, DomainOrAddress, Parameter},
 };
 
 pub fn command(input: &[u8]) -> IResult<&[u8], Command> {

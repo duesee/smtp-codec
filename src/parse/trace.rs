@@ -1,13 +1,3 @@
-use crate::parse::{
-    address::address_literal,
-    command::{Mailbox, Path, Reverse_path},
-    imf::{
-        datetime::date_time,
-        folding_ws_and_comment::{CFWS, FWS},
-        identification::msg_id,
-    },
-    Atom, Domain, String,
-};
 /// 4.4.  Trace Information (RFC 5321)
 use abnf_core::streaming::CRLF;
 use nom::{
@@ -17,6 +7,17 @@ use nom::{
     multi::many1,
     sequence::tuple,
     IResult,
+};
+
+use crate::parse::{
+    address::address_literal,
+    command::{Mailbox, Path, Reverse_path},
+    imf::{
+        datetime::date_time,
+        folding_ws_and_comment::{CFWS, FWS},
+        identification::msg_id,
+    },
+    Atom, Domain, String,
 };
 
 /// Return-path-line = "Return-Path:" FWS Reverse-path <CRLF>
