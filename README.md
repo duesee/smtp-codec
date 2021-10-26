@@ -1,5 +1,6 @@
-![CI](https://github.com/duesee/smtp-codec/actions/workflows/ci.yml/badge.svg)
-![Scheduled](https://github.com/duesee/smtp-codec/actions/workflows/scheduled.yml/badge.svg)
+[![CI](https://github.com/duesee/smtp-codec/actions/workflows/ci.yml/badge.svg)](https://github.com/duesee/smtp-codec/actions/workflows/ci.yml)
+[![Scheduled](https://github.com/duesee/smtp-codec/actions/workflows/scheduled.yml/badge.svg)](https://github.com/duesee/smtp-codec/actions/workflows/scheduled.yml)
+[![docs](https://docs.rs/smtp-codec/badge.svg)](https://docs.rs/smtp-codec)
 
 # SMTP Protocol
 
