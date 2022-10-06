@@ -1,9 +1,9 @@
-use std::io::Write;
+use std::{borrow::Cow, fmt, io::Write, ops::Deref};
 
 #[cfg(feature = "serdex")]
 use serde::{Deserialize, Serialize};
 
-use crate::utils::escape_quoted;
+use crate::{parse::response::is_text_string_byte, utils::escape_quoted};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
@@ -302,7 +302,7 @@ pub enum Response {
     },
     Other {
         code: ReplyCode,
-        text: String,
+        lines: Vec<TextString<'static>>,
     },
 }
 
@@ -330,13 +330,13 @@ impl Response {
         }
     }
 
-    pub fn other<T>(code: ReplyCode, text: T) -> Response
+    pub fn other<T>(code: ReplyCode, text: TextString<'static>) -> Response
     where
         T: Into<String>,
     {
         Response::Other {
             code,
-            text: text.into(),
+            lines: vec![text],
         }
     }
 
@@ -387,19 +387,16 @@ impl Response {
                     writer.write_all(format!("250 {}{}\r\n", domain, greet).as_bytes())?;
                 }
             }
-            Response::Other { code, text } => {
+            Response::Other { code, lines } => {
                 let code = u16::from(*code);
-                let lines = text.lines().collect::<Vec<_>>();
-
-                if let Some((last, head)) = lines.split_last() {
-                    for line in head {
-                        write!(writer, "{}-{}\r\n", code, line)?;
-                    }
-
-                    write!(writer, "{} {}\r\n", code, last)?;
-                } else {
-                    write!(writer, "{}\r\n", code)?;
+                for line in lines.iter().take(lines.len().saturating_sub(1)) {
+                    write!(writer, "{}-{}\r\n", code, line,)?;
                 }
+
+                match lines.last() {
+                    Some(s) => write!(writer, "{} {}\r\n", code, s)?,
+                    None => write!(writer, "{}\r\n", code)?,
+                };
             }
         }
 
@@ -785,9 +782,52 @@ impl AuthMechanism {
     }
 }
 
+/// A string containing of tab, space and printable ASCII characters
+#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TextString<'a>(pub(crate) Cow<'a, str>);
+
+impl<'a> TextString<'a> {
+    pub fn new(s: &'a str) -> Result<Self, InvalidTextString> {
+        match s.as_bytes().iter().all(|&b| is_text_string_byte(b)) {
+            true => Ok(TextString(Cow::Borrowed(s))),
+            false => Err(InvalidTextString(())),
+        }
+    }
+
+    pub fn into_owned(self) -> TextString<'static> {
+        TextString(self.0.into_owned().into())
+    }
+}
+
+impl Deref for TextString<'_> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl fmt::Display for TextString<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug)]
+pub struct InvalidTextString(());
+
+impl fmt::Display for InvalidTextString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "input contains invalid characters")
+    }
+}
+
+impl std::error::Error for InvalidTextString {}
+
 #[cfg(test)]
 mod tests {
-    use super::{Capability, ReplyCode, Response};
+    use super::{Capability, ReplyCode, Response, TextString};
 
     #[test]
     fn test_serialize_greeting() {
@@ -879,21 +919,21 @@ mod tests {
             (
                 Response::Other {
                     code: ReplyCode::StartMailInput,
-                    text: String::new(),
+                    lines: vec![],
                 },
                 b"354\r\n".as_ref(),
             ),
             (
                 Response::Other {
                     code: ReplyCode::StartMailInput,
-                    text: "A".into(),
+                    lines: vec![TextString::new("A").unwrap()],
                 },
                 b"354 A\r\n".as_ref(),
             ),
             (
                 Response::Other {
                     code: ReplyCode::StartMailInput,
-                    text: "A\nB".into(),
+                    lines: vec![TextString::new("A").unwrap(), TextString::new("B").unwrap()],
                 },
                 b"354-A\r\n354 B\r\n".as_ref(),
             ),
