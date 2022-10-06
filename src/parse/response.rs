@@ -116,7 +116,7 @@ pub fn Reply_code(input: &[u8]) -> IResult<&[u8], u16> {
             take_while_m_n(3, 3, nom::character::is_digit),
             std::str::from_utf8,
         ),
-        |s| u16::from_str_radix(s, 10),
+        str::parse,
     )(input)
 }
 
