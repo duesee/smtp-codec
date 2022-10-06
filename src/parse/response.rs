@@ -12,7 +12,7 @@ use nom::{
 
 use crate::{
     parse::{address::address_literal, number, Domain},
-    types::{AuthMechanism, Capability, ReplyCode, Response},
+    types::{AuthMechanism, Capability, ReplyCode, Response, TextString},
 };
 
 /// Greeting = ( "220 " (Domain / address-literal) [ SP textstring ] CRLF ) /
@@ -79,14 +79,15 @@ pub fn Greeting(input: &[u8]) -> IResult<&[u8], Response> {
 /// HT, SP, Printable US-ASCII
 ///
 /// textstring = 1*(%d09 / %d32-126)
-pub fn textstring(input: &[u8]) -> IResult<&[u8], &str> {
-    fn is_value(byte: u8) -> bool {
-        matches!(byte, 9 | 32..=126)
-    }
+pub fn textstring(input: &[u8]) -> IResult<&[u8], TextString<'_>> {
+    let (remaining, parsed) =
+        map_res(take_while1(is_text_string_byte), std::str::from_utf8)(input)?;
 
-    let (remaining, parsed) = map_res(take_while1(is_value), std::str::from_utf8)(input)?;
+    Ok((remaining, TextString(parsed.into())))
+}
 
-    Ok((remaining, parsed))
+pub(crate) fn is_text_string_byte(byte: u8) -> bool {
+    matches!(byte, 9 | 32..=126)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -106,12 +107,12 @@ pub fn Reply_lines(input: &[u8]) -> IResult<&[u8], Response> {
                 Vec::with_capacity(intermediate.len() + if text.is_some() { 1 } else { 0 });
             for (_, _, text, _) in intermediate {
                 if let Some(line) = text {
-                    lines.push(line.to_owned());
+                    lines.push(line.into_owned());
                 }
             }
 
             if let Some((_, line)) = text {
-                lines.push(line.to_owned());
+                lines.push(line.into_owned());
             }
 
             Response::Other { code, lines }
