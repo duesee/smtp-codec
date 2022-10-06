@@ -655,7 +655,7 @@ mod tests {
             ),
         ];
 
-        for (test, expected) in tests.into_iter() {
+        for (test, expected) in tests.iter() {
             let mut got = Vec::new();
             test.serialize(&mut got).unwrap();
             assert_eq!(expected, &got);
@@ -699,7 +699,7 @@ mod tests {
             ),
         ];
 
-        for (test, expected) in tests.into_iter() {
+        for (test, expected) in tests.iter() {
             let mut got = Vec::new();
             test.serialize(&mut got).unwrap();
             assert_eq!(expected, &got);
@@ -732,7 +732,7 @@ mod tests {
             ),
         ];
 
-        for (test, expected) in tests.into_iter() {
+        for (test, expected) in tests.iter() {
             let mut got = Vec::new();
             test.serialize(&mut got).unwrap();
             assert_eq!(expected, &got);
