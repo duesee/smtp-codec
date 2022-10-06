@@ -67,7 +67,7 @@ pub fn Quoted_string(input: &[u8]) -> IResult<&[u8], Cow<'_, str>> {
             map_res(recognize(many0(QcontentSMTP)), std::str::from_utf8),
             DQUOTE,
         ),
-        |s| unescape_quoted(s),
+        unescape_quoted,
     )(input)
 }
 
