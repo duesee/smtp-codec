@@ -110,9 +110,14 @@ impl DomainOrAddress {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Parameter {
-    keyword: String,
-    value: Option<String>,
+#[non_exhaustive]
+pub enum Parameter {
+    /// Message size declaration [RFC1870]
+    Size(u32),
+    Other {
+        keyword: String,
+        value: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -244,20 +249,20 @@ impl Command {
 }
 
 impl Parameter {
-    pub fn new<K: Into<String>, V: Into<String>>(keyword: K, value: Option<V>) -> Parameter {
-        Parameter {
-            keyword: keyword.into(),
-            value: value.map(Into::into),
-        }
-    }
-
     pub fn serialize(&self, writer: &mut impl Write) -> std::io::Result<()> {
-        writer.write_all(self.keyword.as_bytes())?;
+        match self {
+            Parameter::Size(size) => {
+                write!(writer, "SIZE={}", size)?;
+            }
+            Parameter::Other { keyword, value } => {
+                writer.write_all(keyword.as_bytes())?;
 
-        if let Some(ref value) = self.value {
-            writer.write_all(b"=")?;
-            writer.write_all(value.as_bytes())?;
-        }
+                if let Some(ref value) = value {
+                    writer.write_all(b"=")?;
+                    writer.write_all(value.as_bytes())?;
+                }
+            }
+        };
 
         Ok(())
     }

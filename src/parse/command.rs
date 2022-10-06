@@ -88,10 +88,18 @@ pub fn Mail_parameters(input: &[u8]) -> IResult<&[u8], Vec<Parameter>> {
 
 /// esmtp-param = esmtp-keyword ["=" esmtp-value]
 pub fn esmtp_param(input: &[u8]) -> IResult<&[u8], Parameter> {
-    map(
-        tuple((esmtp_keyword, opt(preceded(tag(b"="), esmtp_value)))),
-        |(keyword, value)| Parameter::new(keyword, value),
-    )(input)
+    alt((
+        map_res(tuple((tag_no_case(b"SIZE="), esmtp_value)), |(_, value)| {
+            value.parse().map(Parameter::Size)
+        }),
+        map(
+            tuple((esmtp_keyword, opt(preceded(tag(b"="), esmtp_value)))),
+            |(keyword, value)| Parameter::Other {
+                keyword: keyword.to_owned(),
+                value: value.map(String::from),
+            },
+        ),
+    ))(input)
 }
 
 /// esmtp-keyword = (ALPHA / DIGIT) *(ALPHA / DIGIT / "-")
@@ -353,7 +361,7 @@ pub fn Dot_string(input: &[u8]) -> IResult<&[u8], &str> {
 
 #[cfg(test)]
 mod test {
-    use super::{ehlo, helo, mail};
+    use super::{ehlo, helo, mail, Parameter};
     use crate::types::{Command, DomainOrAddress};
 
     #[test]
@@ -382,12 +390,12 @@ mod test {
 
     #[test]
     fn test_mail() {
-        let (rem, parsed) = mail(b"MAIL FROM:<userx@y.foo.org>\r\n???").unwrap();
+        let (rem, parsed) = mail(b"MAIL FROM:<userx@y.foo.org> size=12345\r\n???").unwrap();
         assert_eq!(
             parsed,
             Command::Mail {
                 reverse_path: "userx@y.foo.org".into(),
-                parameters: Vec::default(),
+                parameters: vec![Parameter::Size(12345)],
             }
         );
         assert_eq!(rem, b"???");
