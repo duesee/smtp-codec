@@ -289,6 +289,7 @@ impl AtomOrQuoted {
 
 #[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Response {
     Greeting {
         domain: String,
@@ -409,6 +410,7 @@ impl Response {
 
 #[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Capability {
     // Send as mail [RFC821]
     // The description of SEND was updated by [RFC1123] and then its actual use was deprecated in [RFC2821]
@@ -591,6 +593,7 @@ impl Capability {
 
 #[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthMechanism {
     Plain,
     Login,
