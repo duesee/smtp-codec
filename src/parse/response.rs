@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use abnf_core::streaming::{is_ALPHA, is_DIGIT, CRLF, SP};
 use nom::{
     branch::alt,
@@ -10,7 +12,7 @@ use nom::{
 
 use crate::{
     parse::{address::address_literal, number, Domain},
-    types::{AuthMechanism, Capability, Response},
+    types::{AuthMechanism, Capability, ReplyCode, Response},
 };
 
 /// Greeting = ( "220 " (Domain / address-literal) [ SP textstring ] CRLF ) /
@@ -91,15 +93,32 @@ pub fn textstring(input: &[u8]) -> IResult<&[u8], &str> {
 
 /// Reply-line = *( Reply-code "-" [ textstring ] CRLF )
 ///                 Reply-code [ SP textstring ] CRLF
-pub fn Reply_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((
-        many0(tuple((Reply_code, tag(b"-"), opt(textstring), CRLF))),
-        Reply_code,
-        opt(tuple((SP, textstring))),
-        CRLF,
-    ));
+pub fn Reply_lines(input: &[u8]) -> IResult<&[u8], Response> {
+    let mut parser = map(
+        tuple((
+            many0(tuple((Reply_code, tag(b"-"), opt(textstring), CRLF))),
+            Reply_code,
+            opt(tuple((SP, textstring))),
+            CRLF,
+        )),
+        |(intermediate, code, text, _)| {
+            let mut lines =
+                Vec::with_capacity(intermediate.len() + if text.is_some() { 1 } else { 0 });
+            for (_, _, text, _) in intermediate {
+                if let Some(line) = text {
+                    lines.push(line.to_owned());
+                }
+            }
 
-    let (remaining, parsed) = recognize(parser)(input)?;
+            if let Some((_, line)) = text {
+                lines.push(line.to_owned());
+            }
+
+            Response::Other { code, lines }
+        },
+    );
+
+    let (remaining, parsed) = parser(input)?;
 
     Ok((remaining, parsed))
 }
@@ -109,14 +128,14 @@ pub fn Reply_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
 ///   2345
 /// 012345
 /// 0123456789
-pub fn Reply_code(input: &[u8]) -> IResult<&[u8], u16> {
+pub fn Reply_code(input: &[u8]) -> IResult<&[u8], ReplyCode> {
     // FIXME: do not accept all codes.
     map_res(
         map_res(
             take_while_m_n(3, 3, nom::character::is_digit),
             std::str::from_utf8,
         ),
-        str::parse,
+        |s| u16::from_str(s).map(ReplyCode::from),
     )(input)
 }
 
