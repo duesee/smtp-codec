@@ -301,7 +301,7 @@ pub enum Response {
         capabilities: Vec<Capability>,
     },
     Other {
-        code: u16,
+        code: ReplyCode,
         text: String,
     },
 }
@@ -330,7 +330,7 @@ impl Response {
         }
     }
 
-    pub fn other<T>(code: u16, text: T) -> Response
+    pub fn other<T>(code: ReplyCode, text: T) -> Response
     where
         T: Into<String>,
     {
@@ -388,6 +388,7 @@ impl Response {
                 }
             }
             Response::Other { code, text } => {
+                let code = u16::from(*code);
                 let lines = text.lines().collect::<Vec<_>>();
 
                 if let Some((last, head)) = lines.split_last() {
@@ -592,6 +593,164 @@ impl Capability {
 }
 
 #[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub enum ReplyCode {
+    /// 211 System status, or system help reply
+    SystemStatus,
+    /// 214 Help message
+    ///
+    /// Information on how to use the receiver or the meaning of a particular non-standard
+    /// command; this reply is useful only to the human user.
+    HelpMessage,
+    /// 220 <domain> Service ready
+    Ready,
+    /// 221 <domain> Service closing transmission channel
+    ClosingChannel,
+    /// 250 Requested mail action okay, completed
+    Ok,
+    /// 251 User not local; will forward to <forward-path>
+    UserNotLocalWillForward,
+    /// 252 Cannot VRFY user, but will accept message and attempt delivery
+    CannotVrfy,
+    /// 354 Start mail input; end with <CRLF>.<CRLF>
+    StartMailInput,
+    /// 421 <domain> Service not available, closing transmission channel
+    ///
+    /// This may be a reply to any command if the service knows it must shut down.
+    NotAvailable,
+    /// 450 Requested mail action not taken: mailbox unavailable
+    ///
+    /// E.g., mailbox busy or temporarily blocked for policy reasons.
+    MailboxTemporarilyUnavailable,
+    /// 451 Requested action aborted: local error in processing
+    ProcessingError,
+    /// 452 Requested action not taken: insufficient system storage
+    InsufficientStorage,
+    /// 455 Server unable to accommodate parameters
+    UnableToAccommodateParameters,
+    /// 500 Syntax error, command unrecognized
+    SyntaxError,
+    /// 501 Syntax error in parameters or arguments
+    ParameterSyntaxError,
+    /// 502 Command not implemented
+    CommandNotImplemented,
+    /// 503 Bad sequence of commands
+    BadSequence,
+    /// 504 Command parameter not implemented
+    ParameterNotImplemented,
+    /// 521 <domain> does not accept mail (see RFC 1846)
+    NoMailService,
+    /// 550 Requested action not taken: mailbox unavailable
+    ///
+    /// E.g. mailbox not found, no access, or command rejected for policy reasons.
+    MailboxPermanentlyUnavailable,
+    /// 551 User not local; please try <forward-path>
+    UserNotLocal,
+    /// 552 Requested mail action aborted: exceeded storage allocation
+    ExceededStorageAllocation,
+    /// 553 Requested action not taken: mailbox name not allowed
+    ///
+    /// E.g. mailbox syntax incorrect.
+    MailboxNameNotAllowed,
+    /// 554 Transaction failed
+    ///
+    /// Or, in the case of a connection-opening response, "No SMTP service here".
+    TransactionFailed,
+    /// 555 MAIL FROM/RCPT TO parameters not recognized or not implemented
+    ParametersNotImplemented,
+    /// Miscellaneous reply codes
+    Other(u16),
+}
+
+impl ReplyCode {
+    pub fn is_completed(&self) -> bool {
+        let code = u16::from(*self);
+        code > 199 && code < 300
+    }
+
+    pub fn is_accepted(&self) -> bool {
+        let code = u16::from(*self);
+        code > 299 && code < 400
+    }
+
+    pub fn is_temporary_error(&self) -> bool {
+        let code = u16::from(*self);
+        code > 399 && code < 500
+    }
+
+    pub fn is_permanent_error(&self) -> bool {
+        let code = u16::from(*self);
+        code > 499 && code < 600
+    }
+}
+
+impl From<u16> for ReplyCode {
+    fn from(value: u16) -> Self {
+        match value {
+            211 => ReplyCode::SystemStatus,
+            214 => ReplyCode::HelpMessage,
+            220 => ReplyCode::Ready,
+            221 => ReplyCode::ClosingChannel,
+            250 => ReplyCode::Ok,
+            251 => ReplyCode::UserNotLocalWillForward,
+            252 => ReplyCode::CannotVrfy,
+            354 => ReplyCode::StartMailInput,
+            421 => ReplyCode::NotAvailable,
+            450 => ReplyCode::MailboxTemporarilyUnavailable,
+            451 => ReplyCode::ProcessingError,
+            452 => ReplyCode::InsufficientStorage,
+            455 => ReplyCode::UnableToAccommodateParameters,
+            500 => ReplyCode::SyntaxError,
+            501 => ReplyCode::ParameterSyntaxError,
+            502 => ReplyCode::CommandNotImplemented,
+            503 => ReplyCode::BadSequence,
+            504 => ReplyCode::ParameterNotImplemented,
+            521 => ReplyCode::NoMailService,
+            550 => ReplyCode::MailboxPermanentlyUnavailable,
+            551 => ReplyCode::UserNotLocal,
+            552 => ReplyCode::ExceededStorageAllocation,
+            553 => ReplyCode::MailboxNameNotAllowed,
+            554 => ReplyCode::TransactionFailed,
+            555 => ReplyCode::ParametersNotImplemented,
+            _ => ReplyCode::Other(value),
+        }
+    }
+}
+
+impl From<ReplyCode> for u16 {
+    fn from(value: ReplyCode) -> Self {
+        match value {
+            ReplyCode::SystemStatus => 211,
+            ReplyCode::HelpMessage => 214,
+            ReplyCode::Ready => 220,
+            ReplyCode::ClosingChannel => 221,
+            ReplyCode::Ok => 250,
+            ReplyCode::UserNotLocalWillForward => 251,
+            ReplyCode::CannotVrfy => 252,
+            ReplyCode::StartMailInput => 354,
+            ReplyCode::NotAvailable => 421,
+            ReplyCode::MailboxTemporarilyUnavailable => 450,
+            ReplyCode::ProcessingError => 451,
+            ReplyCode::InsufficientStorage => 452,
+            ReplyCode::UnableToAccommodateParameters => 455,
+            ReplyCode::SyntaxError => 500,
+            ReplyCode::ParameterSyntaxError => 501,
+            ReplyCode::CommandNotImplemented => 502,
+            ReplyCode::BadSequence => 503,
+            ReplyCode::ParameterNotImplemented => 504,
+            ReplyCode::NoMailService => 521,
+            ReplyCode::MailboxPermanentlyUnavailable => 550,
+            ReplyCode::UserNotLocal => 551,
+            ReplyCode::ExceededStorageAllocation => 552,
+            ReplyCode::MailboxNameNotAllowed => 553,
+            ReplyCode::TransactionFailed => 554,
+            ReplyCode::ParametersNotImplemented => 555,
+            ReplyCode::Other(v) => v,
+        }
+    }
+}
+
+#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AuthMechanism {
@@ -628,7 +787,7 @@ impl AuthMechanism {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{Capability, Response};
+    use super::{Capability, ReplyCode, Response};
 
     #[test]
     fn test_serialize_greeting() {
@@ -719,24 +878,24 @@ mod tests {
         let tests = &[
             (
                 Response::Other {
-                    code: 333,
-                    text: "".into(),
+                    code: ReplyCode::StartMailInput,
+                    text: String::new(),
                 },
-                b"333\r\n".as_ref(),
+                b"354\r\n".as_ref(),
             ),
             (
                 Response::Other {
-                    code: 333,
+                    code: ReplyCode::StartMailInput,
                     text: "A".into(),
                 },
-                b"333 A\r\n".as_ref(),
+                b"354 A\r\n".as_ref(),
             ),
             (
                 Response::Other {
-                    code: 333,
+                    code: ReplyCode::StartMailInput,
                     text: "A\nB".into(),
                 },
-                b"333-A\r\n333 B\r\n".as_ref(),
+                b"354-A\r\n354 B\r\n".as_ref(),
             ),
         ];
 
