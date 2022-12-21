@@ -1,4 +1,4 @@
 pub mod parse;
-pub mod types;
+pub use smtp_types::*;
 
 mod utils;

@@ -1,0 +1,16 @@
+[package]
+name = "smtp-types"
+description = "Misuse-resistant SMTP types"
+keywords = ["email", "smtp", "types"]
+version = "0.2.0"
+authors = ["Damian Poddebniak <poddebniak@mailbox.org>"]
+repository = "https://github.com/duesee/smtp-codec"
+license = "MIT OR Apache-2.0"
+edition = "2021"
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }

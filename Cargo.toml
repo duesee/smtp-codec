@@ -12,11 +12,17 @@ edition = "2018"
 
 [features]
 default = []
-serdex  = ["serde"]
+serdex = ["serde"]
 
 [dependencies]
 nom = "7"
 abnf-core = "0.5"
+smtp-types = { path = "smtp-types" }
 
 # Optional
 serde = { version = "1.0", features = ["derive"], optional = true }
+
+[workspace]
+members = [
+    "smtp-types"
+]

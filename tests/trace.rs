@@ -4,7 +4,7 @@ use smtp_codec::{
         command::command,
         response::{ehlo_ok_rsp, Greeting, Reply_lines},
     },
-    types::Command,
+    Command,
 };
 
 fn parse_trace(mut trace: &[u8]) {
