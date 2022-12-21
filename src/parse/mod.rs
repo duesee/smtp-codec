@@ -13,7 +13,7 @@ use nom::{
     IResult,
 };
 
-use crate::{parse::imf::atom::is_atext, types::AtomOrQuoted, utils::unescape_quoted};
+use crate::{parse::imf::atom::is_atext, utils::unescape_quoted, AtomOrQuoted};
 
 pub mod address;
 pub mod command;

@@ -12,7 +12,7 @@ use nom::{
 
 use crate::{
     parse::{address::address_literal, number, Domain},
-    types::{AuthMechanism, Capability, ReplyCode, Response, TextString},
+    AuthMechanism, Capability, ReplyCode, Response, TextString,
 };
 
 /// Greeting = ( "220 " (Domain / address-literal) [ SP textstring ] CRLF ) /
@@ -83,7 +83,9 @@ pub fn textstring(input: &[u8]) -> IResult<&[u8], TextString<'_>> {
     let (remaining, parsed) =
         map_res(take_while1(is_text_string_byte), std::str::from_utf8)(input)?;
 
-    Ok((remaining, TextString(parsed.into())))
+    // We can use `_unchecked` here because `take_while1` ensures we have at least one character
+    // and `is_text_string_byte` ensures that all characters are in the allowed set.
+    Ok((remaining, TextString::new_unchecked(parsed)))
 }
 
 pub(crate) fn is_text_string_byte(byte: u8) -> bool {
@@ -297,7 +299,7 @@ pub fn auth_mechanism(input: &[u8]) -> IResult<&[u8], AuthMechanism> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::types::AuthMechanism;
+    use crate::AuthMechanism;
 
     #[test]
     fn test_Greeting() {

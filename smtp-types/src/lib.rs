@@ -1,9 +1,11 @@
 use std::{borrow::Cow, fmt, io::Write, ops::Deref};
 
-#[cfg(feature = "serdex")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{parse::response::is_text_string_byte, utils::escape_quoted};
+use crate::utils::escape_quoted;
+
+mod utils;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
@@ -287,7 +289,7 @@ impl AtomOrQuoted {
 
 // -------------------------------------------------------------------------------------------------
 
-#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Response {
@@ -406,7 +408,7 @@ impl Response {
 
 // -------------------------------------------------------------------------------------------------
 
-#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Capability {
@@ -589,7 +591,7 @@ impl Capability {
     }
 }
 
-#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum ReplyCode {
     /// 211 System status, or system help reply
@@ -747,7 +749,7 @@ impl From<ReplyCode> for u16 {
     }
 }
 
-#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AuthMechanism {
@@ -783,16 +785,28 @@ impl AuthMechanism {
 }
 
 /// A string containing of tab, space and printable ASCII characters
-#[cfg_attr(feature = "serdex", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TextString<'a>(pub(crate) Cow<'a, str>);
 
 impl<'a> TextString<'a> {
     pub fn new(s: &'a str) -> Result<Self, InvalidTextString> {
+        if s.is_empty() {
+            return Err(InvalidTextString(()));
+        }
+
         match s.as_bytes().iter().all(|&b| is_text_string_byte(b)) {
             true => Ok(TextString(Cow::Borrowed(s))),
             false => Err(InvalidTextString(())),
         }
+    }
+
+    pub fn new_unchecked(s: &'a str) -> Self {
+        #[cfg(debug_assertions)]
+        return TextString::new(s).expect("String should have been valid but wasn't.");
+
+        #[cfg(not(debug_assertions))]
+        return TextString(Cow::Borrowed(s));
     }
 
     pub fn into_owned(self) -> TextString<'static> {
@@ -824,6 +838,14 @@ impl fmt::Display for InvalidTextString {
 }
 
 impl std::error::Error for InvalidTextString {}
+
+// -------------------------------------------------------------------------------------------------
+
+fn is_text_string_byte(byte: u8) -> bool {
+    matches!(byte, 9 | 32..=126)
+}
+
+// -------------------------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
