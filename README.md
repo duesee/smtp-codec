@@ -2,9 +2,11 @@
 [![Scheduled](https://github.com/duesee/smtp-codec/actions/workflows/scheduled.yml/badge.svg)](https://github.com/duesee/smtp-codec/actions/workflows/scheduled.yml)
 [![docs](https://docs.rs/smtp-codec/badge.svg)](https://docs.rs/smtp-codec)
 
-# SMTP Protocol
+# smtp-codec
 
-This crate provides some types and many parsers for SMTP. Many things are there, but it is still in a very rough state.
+This library provides parsing, serialization, and support for SMTP implementations.
+It is based on `smtp-types` and aims to become a rock-solid building block for SMTP client and server implementations in Rust.
+Many things are there, but `smtp-codec` is still in a rough state.
 
 # License
 
