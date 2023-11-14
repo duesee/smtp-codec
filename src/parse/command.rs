@@ -9,7 +9,7 @@ use nom::{
 };
 
 use crate::{
-    parse::{address::address_literal, base64, Atom, Domain, Quoted_string, String},
+    parse::{address::address_literal, atom, base64, domain, quoted_string, string},
     Command, DomainOrAddress, Parameter,
 };
 
@@ -28,7 +28,7 @@ pub fn helo(input: &[u8]) -> IResult<&[u8], Command> {
         tag_no_case(b"HELO"),
         SP,
         alt((
-            map(Domain, |domain| DomainOrAddress::Domain(domain.into())),
+            map(domain, |domain| DomainOrAddress::Domain(domain.into())),
             map(address_literal, |address| {
                 DomainOrAddress::Address(address.into())
             }),
@@ -47,7 +47,7 @@ pub fn ehlo(input: &[u8]) -> IResult<&[u8], Command> {
         tag_no_case(b"EHLO"),
         SP,
         alt((
-            map(Domain, |domain| DomainOrAddress::Domain(domain.into())),
+            map(domain, |domain| DomainOrAddress::Domain(domain.into())),
             map(address_literal, |address| {
                 DomainOrAddress::Address(address.into())
             }),
@@ -65,8 +65,8 @@ pub fn mail(input: &[u8]) -> IResult<&[u8], Command> {
     let mut parser = tuple((
         tag_no_case(b"MAIL FROM:"),
         opt(SP), // Out-of-Spec, but Outlook does it ...
-        Reverse_path,
-        opt(preceded(SP, Mail_parameters)),
+        reverse_path,
+        opt(preceded(SP, mail_parameters)),
         CRLF,
     ));
 
@@ -82,7 +82,7 @@ pub fn mail(input: &[u8]) -> IResult<&[u8], Command> {
 }
 
 /// Mail-parameters = esmtp-param *(SP esmtp-param)
-pub fn Mail_parameters(input: &[u8]) -> IResult<&[u8], Vec<Parameter>> {
+pub fn mail_parameters(input: &[u8]) -> IResult<&[u8], Vec<Parameter>> {
     separated_list1(SP, esmtp_param)(input)
 }
 
@@ -138,13 +138,13 @@ pub fn rcpt(input: &[u8]) -> IResult<&[u8], Command> {
         opt(SP), // Out-of-Spec, but Outlook does it ...
         alt((
             map_res(
-                recognize(tuple((tag_no_case("<Postmaster@"), Domain, tag(">")))),
+                recognize(tuple((tag_no_case("<Postmaster@"), domain, tag(">")))),
                 std::str::from_utf8,
             ),
             map_res(tag_no_case("<Postmaster>"), std::str::from_utf8),
-            Forward_path,
+            forward_path,
         )),
-        opt(preceded(SP, Rcpt_parameters)),
+        opt(preceded(SP, rcpt_parameters)),
         CRLF,
     ));
 
@@ -160,7 +160,7 @@ pub fn rcpt(input: &[u8]) -> IResult<&[u8], Command> {
 }
 
 /// Rcpt-parameters = esmtp-param *(SP esmtp-param)
-pub fn Rcpt_parameters(input: &[u8]) -> IResult<&[u8], Vec<Parameter>> {
+pub fn rcpt_parameters(input: &[u8]) -> IResult<&[u8], Vec<Parameter>> {
     separated_list1(SP, esmtp_param)(input)
 }
 
@@ -176,7 +176,7 @@ pub fn rset(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// vrfy = "VRFY" SP String CRLF
 pub fn vrfy(input: &[u8]) -> IResult<&[u8], Command> {
-    let mut parser = tuple((tag_no_case(b"VRFY"), SP, String, CRLF));
+    let mut parser = tuple((tag_no_case(b"VRFY"), SP, string, CRLF));
 
     let (remaining, (_, _, data, _)) = parser(input)?;
 
@@ -190,7 +190,7 @@ pub fn vrfy(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// expn = "EXPN" SP String CRLF
 pub fn expn(input: &[u8]) -> IResult<&[u8], Command> {
-    let mut parser = tuple((tag_no_case(b"EXPN"), SP, String, CRLF));
+    let mut parser = tuple((tag_no_case(b"EXPN"), SP, string, CRLF));
 
     let (remaining, (_, _, data, _)) = parser(input)?;
 
@@ -199,7 +199,7 @@ pub fn expn(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// help = "HELP" [ SP String ] CRLF
 pub fn help(input: &[u8]) -> IResult<&[u8], Command> {
-    let mut parser = tuple((tag_no_case(b"HELP"), opt(preceded(SP, String)), CRLF));
+    let mut parser = tuple((tag_no_case(b"HELP"), opt(preceded(SP, string)), CRLF));
 
     let (remaining, (_, maybe_data, _)) = parser(input)?;
 
@@ -213,7 +213,7 @@ pub fn help(input: &[u8]) -> IResult<&[u8], Command> {
 
 /// noop = "NOOP" [ SP String ] CRLF
 pub fn noop(input: &[u8]) -> IResult<&[u8], Command> {
-    let mut parser = tuple((tag_no_case(b"NOOP"), opt(preceded(SP, String)), CRLF));
+    let mut parser = tuple((tag_no_case(b"NOOP"), opt(preceded(SP, string)), CRLF));
 
     let (remaining, (_, maybe_data, _)) = parser(input)?;
 
@@ -282,21 +282,21 @@ pub fn auth_plain(input: &[u8]) -> IResult<&[u8], Command> {
 // ----- 4.1.2.  Command Argument Syntax (RFC 5321) -----
 
 /// Reverse-path = Path / "<>"
-pub fn Reverse_path(input: &[u8]) -> IResult<&[u8], &str> {
-    alt((Path, value("", tag("<>"))))(input)
+pub fn reverse_path(input: &[u8]) -> IResult<&[u8], &str> {
+    alt((path, value("", tag("<>"))))(input)
 }
 
 /// Forward-path = Path
-pub fn Forward_path(input: &[u8]) -> IResult<&[u8], &str> {
-    Path(input)
+pub fn forward_path(input: &[u8]) -> IResult<&[u8], &str> {
+    path(input)
 }
 
 // Path = "<" [ A-d-l ":" ] Mailbox ">"
-pub fn Path(input: &[u8]) -> IResult<&[u8], &str> {
+pub fn path(input: &[u8]) -> IResult<&[u8], &str> {
     delimited(
         tag(b"<"),
         map_res(
-            recognize(tuple((opt(tuple((A_d_l, tag(b":")))), Mailbox))),
+            recognize(tuple((opt(tuple((a_d_l, tag(b":")))), mailbox))),
             std::str::from_utf8,
         ),
         tag(b">"),
@@ -307,8 +307,8 @@ pub fn Path(input: &[u8]) -> IResult<&[u8], &str> {
 ///          ; Note that this form, the so-called "source
 ///          ; route", MUST BE accepted, SHOULD NOT be
 ///          ; generated, and SHOULD be ignored.
-pub fn A_d_l(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = separated_list1(tag(b","), At_domain);
+pub fn a_d_l(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = separated_list1(tag(b","), at_domain);
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -316,8 +316,8 @@ pub fn A_d_l(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// At-domain = "@" Domain
-pub fn At_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((tag(b"@"), Domain));
+pub fn at_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((tag(b"@"), domain));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -325,8 +325,8 @@ pub fn At_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Mailbox = Local-part "@" ( Domain / address-literal )
-pub fn Mailbox(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((Local_part, tag(b"@"), alt((Domain, address_literal))));
+pub fn mailbox(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((local_part, tag(b"@"), alt((domain, address_literal))));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -335,28 +335,28 @@ pub fn Mailbox(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 /// Local-part = Dot-string / Quoted-string
 ///               ; MAY be case-sensitive
-pub fn Local_part(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    alt((recognize(Dot_string), recognize(Quoted_string)))(input)
+pub fn local_part(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    alt((recognize(dot_string), recognize(quoted_string)))(input)
 }
 
 /// Dot-string = Atom *("."  Atom)
-pub fn Dot_string(input: &[u8]) -> IResult<&[u8], &str> {
+pub fn dot_string(input: &[u8]) -> IResult<&[u8], &str> {
     map_res(
-        recognize(separated_list1(tag(b"."), Atom)),
+        recognize(separated_list1(tag(b"."), atom)),
         std::str::from_utf8,
     )(input)
 }
 
 // Not used?
 /// Keyword = Ldh-str
-//pub fn Keyword(input: &[u8]) -> IResult<&[u8], &[u8]> {
-//    Ldh_str(input)
+//pub fn keyword(input: &[u8]) -> IResult<&[u8], &[u8]> {
+//    ldh_str(input)
 //}
 
 // Not used?
 /// Argument = Atom
-//pub fn Argument(input: &[u8]) -> IResult<&[u8], &[u8]> {
-//    Atom(input)
+//pub fn argument(input: &[u8]) -> IResult<&[u8], &[u8]> {
+//    atom(input)
 //}
 
 #[cfg(test)]

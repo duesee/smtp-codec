@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use std::{borrow::Cow, str::from_utf8};
 
 use abnf_core::streaming::{is_ALPHA, is_DIGIT, DQUOTE};
@@ -47,24 +45,24 @@ pub fn number(input: &[u8]) -> IResult<&[u8], u32> {
 // -------------------------------------------------------------------------------------------------
 
 /// String = Atom / Quoted-string
-pub fn String(input: &[u8]) -> IResult<&[u8], AtomOrQuoted> {
+pub fn string(input: &[u8]) -> IResult<&[u8], AtomOrQuoted> {
     alt((
-        map(Atom, |atom| AtomOrQuoted::Atom(atom.into())),
-        map(Quoted_string, |quoted| AtomOrQuoted::Quoted(quoted.into())),
+        map(atom, |atom| AtomOrQuoted::Atom(atom.into())),
+        map(quoted_string, |quoted| AtomOrQuoted::Quoted(quoted.into())),
     ))(input)
 }
 
 /// Atom = 1*atext
-pub fn Atom(input: &[u8]) -> IResult<&[u8], &str> {
+pub fn atom(input: &[u8]) -> IResult<&[u8], &str> {
     map_res(take_while1(is_atext), std::str::from_utf8)(input)
 }
 
 /// Quoted-string = DQUOTE *QcontentSMTP DQUOTE
-pub fn Quoted_string(input: &[u8]) -> IResult<&[u8], Cow<'_, str>> {
+pub fn quoted_string(input: &[u8]) -> IResult<&[u8], Cow<'_, str>> {
     map(
         delimited(
             DQUOTE,
-            map_res(recognize(many0(QcontentSMTP)), std::str::from_utf8),
+            map_res(recognize(many0(q_content_smtp)), std::str::from_utf8),
             DQUOTE,
         ),
         unescape_quoted,
@@ -72,8 +70,8 @@ pub fn Quoted_string(input: &[u8]) -> IResult<&[u8], Cow<'_, str>> {
 }
 
 /// QcontentSMTP = qtextSMTP / quoted-pairSMTP
-pub fn QcontentSMTP(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = alt((take_while_m_n(1, 1, is_qtextSMTP), quoted_pairSMTP));
+pub fn q_content_smtp(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = alt((take_while_m_n(1, 1, is_qtext_smtp), quoted_pair_smtp));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -84,7 +82,7 @@ pub fn QcontentSMTP(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// without blackslash-quoting except double-quote and the backslash itself.
 ///
 /// qtextSMTP = %d32-33 / %d35-91 / %d93-126
-pub fn is_qtextSMTP(byte: u8) -> bool {
+pub fn is_qtext_smtp(byte: u8) -> bool {
     matches!(byte, 32..=33 | 35..=91 | 93..=126)
 }
 
@@ -93,7 +91,7 @@ pub fn is_qtextSMTP(byte: u8) -> bool {
 /// quoted-pairSMTP = %d92 %d32-126
 ///
 /// FIXME: How should e.g. "\a" be interpreted?
-pub fn quoted_pairSMTP(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn quoted_pair_smtp(input: &[u8]) -> IResult<&[u8], &[u8]> {
     //fn is_value(byte: u8) -> bool {
     //    matches!(byte, 32..=126)
     //}
@@ -113,7 +111,7 @@ pub fn quoted_pairSMTP(input: &[u8]) -> IResult<&[u8], &[u8]> {
 // -------------------------------------------------------------------------------------------------
 
 /// Domain = sub-domain *("." sub-domain)
-pub fn Domain(input: &[u8]) -> IResult<&[u8], &str> {
+pub fn domain(input: &[u8]) -> IResult<&[u8], &str> {
     let parser = separated_list1(tag(b"."), sub_domain);
 
     let (remaining, parsed) = map_res(recognize(parser), std::str::from_utf8)(input)?;
@@ -123,7 +121,7 @@ pub fn Domain(input: &[u8]) -> IResult<&[u8], &str> {
 
 /// sub-domain = Let-dig [Ldh-str]
 pub fn sub_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((take_while_m_n(1, 1, is_Let_dig), opt(Ldh_str)));
+    let parser = tuple((take_while_m_n(1, 1, is_let_dig), opt(ldh_str)));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -131,16 +129,16 @@ pub fn sub_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Let-dig = ALPHA / DIGIT
-pub fn is_Let_dig(byte: u8) -> bool {
+pub fn is_let_dig(byte: u8) -> bool {
     is_ALPHA(byte) || is_DIGIT(byte)
 }
 
 /// Ldh-str = *( ALPHA / DIGIT / "-" ) Let-dig
-pub fn Ldh_str(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn ldh_str(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = many0(alt((
         take_while_m_n(1, 1, is_ALPHA),
         take_while_m_n(1, 1, is_DIGIT),
-        recognize(tuple((tag(b"-"), take_while_m_n(1, 1, is_Let_dig)))),
+        recognize(tuple((tag(b"-"), take_while_m_n(1, 1, is_let_dig)))),
     )));
 
     let (remaining, parsed) = recognize(parser)(input)?;
