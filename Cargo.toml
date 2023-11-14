@@ -1,22 +1,10 @@
-[package]
-name = "smtp-codec"
-description = "Low-level SMTP Parser and Serializer"
-keywords = ["email", "smtp", "parser", "codec"]
-version = "0.2.0"
-authors = ["Damian Poddebniak <poddebniak@mailbox.org>"]
-repository = "https://github.com/duesee/smtp-codec"
-license = "MIT OR Apache-2.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-abnf-core = "0.5"
-nom = "7"
-serde = { version = "1.0", features = ["derive"], optional = true }
-smtp-types = { path = "smtp-types" }
-
 [workspace]
+resolver = "2"
 members = [
-    "smtp-types"
+    "smtp-types",
+    "smtp-codec",
 ]
+
+[patch.crates-io]
+smtp-types = { path = "smtp-types" }
+smtp-codec = { path = "smtp-codec" }

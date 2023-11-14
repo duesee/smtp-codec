@@ -1,0 +1,15 @@
+[package]
+name = "smtp-codec"
+description = "Low-level SMTP Parser and Serializer"
+keywords = ["email", "smtp", "parser", "codec"]
+version = "0.2.0"
+authors = ["Damian Poddebniak <poddebniak@mailbox.org>"]
+repository = "https://github.com/duesee/smtp-codec"
+license = "MIT OR Apache-2.0"
+edition = "2021"
+
+[dependencies]
+abnf-core = "0.5"
+nom = "7"
+smtp-types = { path = "../smtp-types" }
+
