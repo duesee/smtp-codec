@@ -10,17 +10,11 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = []
-serdex = ["serde"]
-
 [dependencies]
-nom = "7"
 abnf-core = "0.5"
-smtp-types = { path = "smtp-types" }
-
-# Optional
+nom = "7"
 serde = { version = "1.0", features = ["derive"], optional = true }
+smtp-types = { path = "smtp-types" }
 
 [workspace]
 members = [
