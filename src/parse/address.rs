@@ -11,7 +11,7 @@ use nom::{
     IResult,
 };
 
-use crate::parse::Ldh_str;
+use crate::parse::ldh_str;
 
 /// address-literal = "[" (
 ///                       IPv4-address-literal /
@@ -24,9 +24,9 @@ pub fn address_literal(input: &[u8]) -> IResult<&[u8], &str> {
         tag(b"["),
         map_res(
             alt((
-                IPv4_address_literal,
-                IPv6_address_literal,
-                General_address_literal,
+                ipv4_address_literal,
+                ipv6_address_literal,
+                general_address_literal,
             )),
             std::str::from_utf8,
         ),
@@ -35,8 +35,8 @@ pub fn address_literal(input: &[u8]) -> IResult<&[u8], &str> {
 }
 
 /// IPv4-address-literal = Snum 3("."  Snum)
-pub fn IPv4_address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((Snum, count(tuple((tag(b"."), Snum)), 3)));
+pub fn ipv4_address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((snum, count(tuple((tag(b"."), snum)), 3)));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -46,13 +46,13 @@ pub fn IPv4_address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// Representing a decimal integer value in the range 0 through 255
 ///
 /// Snum = 1*3DIGIT
-pub fn Snum(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn snum(input: &[u8]) -> IResult<&[u8], &[u8]> {
     take_while_m_n(1, 3, is_DIGIT)(input)
 }
 
 /// IPv6-address-literal = "IPv6:" IPv6-addr
-pub fn IPv6_address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((tag_no_case(b"IPv6:"), IPv6_addr));
+pub fn ipv6_address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((tag_no_case(b"IPv6:"), ipv6_addr));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -60,8 +60,8 @@ pub fn IPv6_address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// IPv6-addr = IPv6-full / IPv6-comp / IPv6v4-full / IPv6v4-comp
-pub fn IPv6_addr(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = alt((IPv6_full, IPv6_comp, IPv6v4_full, IPv6v4_comp));
+pub fn ipv6_addr(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = alt((ipv6_full, ipv6_comp, ipv6v4_full, ipv6v4_comp));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -69,8 +69,8 @@ pub fn IPv6_addr(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// IPv6-full = IPv6-hex 7(":" IPv6-hex)
-pub fn IPv6_full(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((IPv6_hex, count(tuple((tag(b":"), IPv6_hex)), 7)));
+pub fn ipv6_full(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((ipv6_hex, count(tuple((tag(b":"), ipv6_hex)), 7)));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -78,7 +78,7 @@ pub fn IPv6_full(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// IPv6-hex = 1*4HEXDIG
-pub fn IPv6_hex(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn ipv6_hex(input: &[u8]) -> IResult<&[u8], &[u8]> {
     take_while_m_n(1, 4, is_hex_digit)(input)
 }
 
@@ -86,16 +86,16 @@ pub fn IPv6_hex(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// No more than 6 groups in addition to the "::" may be present.
 ///
 /// IPv6-comp = [IPv6-hex *5(":" IPv6-hex)] "::" [IPv6-hex *5(":" IPv6-hex)]
-pub fn IPv6_comp(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn ipv6_comp(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = tuple((
         opt(tuple((
-            IPv6_hex,
-            many_m_n(0, 5, tuple((tag(b":"), IPv6_hex))),
+            ipv6_hex,
+            many_m_n(0, 5, tuple((tag(b":"), ipv6_hex))),
         ))),
         tag(b"::"),
         opt(tuple((
-            IPv6_hex,
-            many_m_n(0, 5, tuple((tag(b":"), IPv6_hex))),
+            ipv6_hex,
+            many_m_n(0, 5, tuple((tag(b":"), ipv6_hex))),
         ))),
     ));
 
@@ -105,12 +105,12 @@ pub fn IPv6_comp(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// IPv6v4-full = IPv6-hex 5(":" IPv6-hex) ":" IPv4-address-literal
-pub fn IPv6v4_full(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn ipv6v4_full(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = tuple((
-        IPv6_hex,
-        count(tuple((tag(b":"), IPv6_hex)), 5),
+        ipv6_hex,
+        count(tuple((tag(b":"), ipv6_hex)), 5),
         tag(b":"),
-        IPv4_address_literal,
+        ipv4_address_literal,
     ));
 
     let (remaining, parsed) = recognize(parser)(input)?;
@@ -124,19 +124,19 @@ pub fn IPv6v4_full(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// IPv6v4-comp = [IPv6-hex *3(":" IPv6-hex)] "::"
 ///               [IPv6-hex *3(":" IPv6-hex) ":"]
 ///               IPv4-address-literal
-pub fn IPv6v4_comp(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn ipv6v4_comp(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = tuple((
         opt(tuple((
-            IPv6_hex,
-            many_m_n(0, 3, tuple((tag(b":"), IPv6_hex))),
+            ipv6_hex,
+            many_m_n(0, 3, tuple((tag(b":"), ipv6_hex))),
         ))),
         tag(b"::"),
         opt(tuple((
-            IPv6_hex,
-            many_m_n(0, 3, tuple((tag(b":"), IPv6_hex))),
+            ipv6_hex,
+            many_m_n(0, 3, tuple((tag(b":"), ipv6_hex))),
             tag(b":"),
         ))),
-        IPv4_address_literal,
+        ipv4_address_literal,
     ));
 
     let (remaining, parsed) = recognize(parser)(input)?;
@@ -145,8 +145,8 @@ pub fn IPv6v4_comp(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// General-address-literal = Standardized-tag ":" 1*dcontent
-pub fn General_address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((Standardized_tag, tag(b":"), take_while1(is_dcontent)));
+pub fn general_address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((standardized_tag, tag(b":"), take_while1(is_dcontent)));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -156,8 +156,8 @@ pub fn General_address_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// Standardized-tag MUST be specified in a Standards-Track RFC and registered with IANA
 ///
 /// Standardized-tag = Ldh-str
-pub fn Standardized_tag(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    Ldh_str(input)
+pub fn standardized_tag(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    ldh_str(input)
 }
 
 /// Printable US-ASCII excl. "[", "\", "]"

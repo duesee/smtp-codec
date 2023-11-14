@@ -11,18 +11,20 @@ use nom::{
 
 use crate::parse::{
     address::address_literal,
-    command::{Mailbox, Path, Reverse_path},
+    atom,
+    command::{mailbox, path, reverse_path},
+    domain,
     imf::{
         datetime::date_time,
-        folding_ws_and_comment::{CFWS, FWS},
+        folding_ws_and_comment::{cfws, fws},
         identification::msg_id,
     },
-    Atom, Domain, String,
+    string,
 };
 
 /// Return-path-line = "Return-Path:" FWS Reverse-path <CRLF>
-pub fn Return_path_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((tag_no_case(b"Return-Path:"), FWS, Reverse_path, CRLF));
+pub fn return_path_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((tag_no_case(b"Return-Path:"), fws, reverse_path, CRLF));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -30,27 +32,27 @@ pub fn Return_path_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Time-stamp-line = "Received:" FWS Stamp <CRLF>
-pub fn Time_stamp_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((tag_no_case(b"Received:"), FWS, Stamp, CRLF));
+pub fn time_stamp_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((tag_no_case(b"Received:"), fws, stamp, CRLF));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
     Ok((remaining, parsed))
 }
 
-/// Stamp = From-domain By-domain Opt-info [CFWS] ";" FWS date-time
+/// Stamp = From-domain By-domain Opt-info [cfws] ";" FWS date-time
 ///
 /// Caution: Where "date-time" is as defined in RFC 5322 [4]
 ///          but the "obs-" forms, especially two-digit
 ///          years, are prohibited in SMTP and MUST NOT be used.
-pub fn Stamp(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn stamp(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = tuple((
-        From_domain,
-        By_domain,
-        Opt_info,
-        opt(CFWS),
+        from_domain,
+        by_domain,
+        opt_info,
+        opt(cfws),
         tag(b";"),
-        FWS,
+        fws,
         date_time,
     ));
 
@@ -60,8 +62,8 @@ pub fn Stamp(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// From-domain = "FROM" FWS Extended-Domain
-pub fn From_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((tag_no_case(b"FROM"), FWS, Extended_Domain));
+pub fn from_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((tag_no_case(b"FROM"), fws, extended_domain));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -69,8 +71,8 @@ pub fn From_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// By-domain = CFWS "BY" FWS Extended-Domain
-pub fn By_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((CFWS, tag_no_case(b"BY"), FWS, Extended_Domain));
+pub fn by_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((cfws, tag_no_case(b"BY"), fws, extended_domain));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -80,15 +82,15 @@ pub fn By_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// Extended-Domain = Domain /
 ///                   ( Domain FWS "(" TCP-info ")" ) /
 ///                   ( address-literal FWS "(" TCP-info ")" )
-pub fn Extended_Domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn extended_domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = alt((
-        recognize(Domain),
-        recognize(tuple((Domain, FWS, tag(b"("), TCP_info, tag(b")")))),
+        recognize(domain),
+        recognize(tuple((domain, fws, tag(b"("), tcp_info, tag(b")")))),
         recognize(tuple((
             address_literal,
-            FWS,
+            fws,
             tag(b"("),
-            TCP_info,
+            tcp_info,
             tag(b")"),
         ))),
     ));
@@ -101,10 +103,10 @@ pub fn Extended_Domain(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// Information derived by server from TCP connection not client EHLO.
 ///
 /// TCP-info = address-literal / ( Domain FWS address-literal )
-pub fn TCP_info(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn tcp_info(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = alt((
         recognize(address_literal),
-        recognize(tuple((Domain, FWS, address_literal))),
+        recognize(tuple((domain, fws, address_literal))),
     ));
 
     let (remaining, parsed) = recognize(parser)(input)?;
@@ -113,13 +115,13 @@ pub fn TCP_info(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Opt-info = [Via] [With] [ID] [For] [Additional-Registered-Clauses]
-pub fn Opt_info(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn opt_info(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = tuple((
-        opt(Via),
-        opt(With),
-        opt(ID),
-        opt(For),
-        opt(Additional_Registered_Clauses),
+        opt(via),
+        opt(with),
+        opt(id),
+        opt(r#for),
+        opt(additional_registered_clauses),
     ));
 
     let (remaining, parsed) = recognize(parser)(input)?;
@@ -128,8 +130,8 @@ pub fn Opt_info(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Via = CFWS "VIA" FWS Link
-pub fn Via(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((CFWS, tag_no_case(b"VIA"), FWS, Link));
+pub fn via(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((cfws, tag_no_case(b"VIA"), fws, link));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -137,8 +139,8 @@ pub fn Via(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// With = CFWS "WITH" FWS Protocol
-pub fn With(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = tuple((CFWS, tag_no_case(b"WITH"), FWS, Protocol));
+pub fn with(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = tuple((cfws, tag_no_case(b"WITH"), fws, protocol));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -147,12 +149,12 @@ pub fn With(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 /// ID = CFWS "ID" FWS ( Atom / msg-id )
 ///       ; msg-id is defined in RFC 5322 [4]
-pub fn ID(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn id(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = tuple((
-        CFWS,
+        cfws,
         tag_no_case(b"ID"),
-        FWS,
-        recognize(alt((recognize(Atom), msg_id))),
+        fws,
+        recognize(alt((recognize(atom), msg_id))),
     ));
 
     let (remaining, parsed) = recognize(parser)(input)?;
@@ -161,12 +163,12 @@ pub fn ID(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// For = CFWS "FOR" FWS ( Path / Mailbox )
-pub fn For(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn r#for(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let parser = tuple((
-        CFWS,
+        cfws,
         tag_no_case(b"FOR"),
-        FWS,
-        alt((recognize(Path), Mailbox)),
+        fws,
+        alt((recognize(path), mailbox)),
     ));
 
     let (remaining, parsed) = recognize(parser)(input)?;
@@ -178,8 +180,8 @@ pub fn For(input: &[u8]) -> IResult<&[u8], &[u8]> {
 /// IANA.  SMTP servers SHOULD NOT use unregistered names.  See Section 8.
 ///
 /// Additional-Registered-Clauses = CFWS Atom FWS String
-pub fn Additional_Registered_Clauses(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let parser = many1(tuple((CFWS, Atom, FWS, String)));
+pub fn additional_registered_clauses(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let parser = many1(tuple((cfws, atom, fws, string)));
 
     let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -187,8 +189,8 @@ pub fn Additional_Registered_Clauses(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Link = "TCP" / Addtl-Link
-pub fn Link(input: &[u8]) -> IResult<&[u8], &str> {
-    alt((map_res(tag_no_case("TCP"), std::str::from_utf8), Addtl_Link))(input)
+pub fn link(input: &[u8]) -> IResult<&[u8], &str> {
+    alt((map_res(tag_no_case("TCP"), std::str::from_utf8), addtl_link))(input)
 }
 
 /// Additional standard names for links are registered with the Internet Assigned Numbers
@@ -196,16 +198,16 @@ pub fn Link(input: &[u8]) -> IResult<&[u8], &str> {
 /// SHOULD NOT use unregistered names.
 ///
 /// Addtl-Link = Atom
-pub fn Addtl_Link(input: &[u8]) -> IResult<&[u8], &str> {
-    Atom(input)
+pub fn addtl_link(input: &[u8]) -> IResult<&[u8], &str> {
+    atom(input)
 }
 
 /// Protocol = "ESMTP" / "SMTP" / Attdl-Protocol
-pub fn Protocol(input: &[u8]) -> IResult<&[u8], &str> {
+pub fn protocol(input: &[u8]) -> IResult<&[u8], &str> {
     alt((
         map_res(tag_no_case(b"ESMTP"), std::str::from_utf8),
         map_res(tag_no_case(b"SMTP"), std::str::from_utf8),
-        Attdl_Protocol,
+        attdl_protocol,
     ))(input)
 }
 
@@ -214,6 +216,6 @@ pub fn Protocol(input: &[u8]) -> IResult<&[u8], &str> {
 /// use unregistered names.
 ///
 /// Attdl-Protocol = Atom
-pub fn Attdl_Protocol(input: &[u8]) -> IResult<&[u8], &str> {
-    Atom(input)
+pub fn attdl_protocol(input: &[u8]) -> IResult<&[u8], &str> {
+    atom(input)
 }

@@ -2,13 +2,13 @@ use nom::FindSubstring;
 use smtp_codec::{
     parse::{
         command::command,
-        response::{ehlo_ok_rsp, Greeting, Reply_lines},
+        response::{ehlo_ok_rsp, greeting, reply_lines},
     },
     Command,
 };
 
 fn parse_trace(mut trace: &[u8]) {
-    let (rem, greeting) = Greeting(trace).unwrap();
+    let (rem, greeting) = greeting(trace).unwrap();
     println!("S: {:?}", greeting);
     trace = rem;
 
@@ -28,7 +28,7 @@ fn parse_trace(mut trace: &[u8]) {
                 trace = rem;
             }
             Command::Data { .. } => {
-                let (rem, rsp) = Reply_lines(trace).unwrap();
+                let (rem, rsp) = reply_lines(trace).unwrap();
                 println!("S: {:?}", rsp);
                 trace = rem;
 
@@ -37,12 +37,12 @@ fn parse_trace(mut trace: &[u8]) {
                 println!("C (data): <{}>", std::str::from_utf8(data).unwrap());
                 trace = rem;
 
-                let (rem, rsp) = Reply_lines(trace).unwrap();
+                let (rem, rsp) = reply_lines(trace).unwrap();
                 println!("S: {:?}", rsp);
                 trace = rem;
             }
             _ => {
-                let (rem, rsp) = Reply_lines(trace).unwrap();
+                let (rem, rsp) = reply_lines(trace).unwrap();
                 println!("S: {:?}", rsp);
                 trace = rem;
             }

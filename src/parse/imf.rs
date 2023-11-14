@@ -38,7 +38,7 @@ pub mod folding_ws_and_comment {
     /// Folding white space
     ///
     /// FWS = ([*WSP CRLF] 1*WSP) / obs-FWS
-    pub fn FWS(_input: &[u8]) -> IResult<&[u8], &[u8]> {
+    pub fn fws(_input: &[u8]) -> IResult<&[u8], &[u8]> {
         unimplemented!()
     }
 
@@ -50,8 +50,8 @@ pub mod folding_ws_and_comment {
 
     // comment = "(" *([FWS] ccontent) [FWS] ")"
 
-    /// CFWS = (1*([FWS] comment) [FWS]) / FWS
-    pub fn CFWS(_input: &[u8]) -> IResult<&[u8], &[u8]> {
+    /// CFWS = (1*([fws] comment) [fws]) / FWS
+    pub fn cfws(_input: &[u8]) -> IResult<&[u8], &[u8]> {
         unimplemented!()
     }
 }
@@ -67,7 +67,7 @@ pub mod atom {
         IResult,
     };
 
-    use super::folding_ws_and_comment::CFWS;
+    use super::folding_ws_and_comment::cfws;
 
     /// Printable US-ASCII characters not including specials.
     /// Used for atoms.
@@ -89,9 +89,9 @@ pub mod atom {
         is_ALPHA(byte) || is_DIGIT(byte) || allowed.contains(&byte)
     }
 
-    /// atom = [CFWS] 1*atext [CFWS]
+    /// atom = [cfws] 1*atext [cfws]
     pub fn atom(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        let parser = tuple((opt(CFWS), take_while1(is_atext), opt(CFWS)));
+        let parser = tuple((opt(cfws), take_while1(is_atext), opt(cfws)));
 
         let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -112,7 +112,7 @@ pub mod atom {
 
     // dot-atom = [CFWS] dot-atom-text [CFWS]
     pub fn dot_atom(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        let parser = tuple((opt(CFWS), dot_atom_text, opt(CFWS)));
+        let parser = tuple((opt(cfws), dot_atom_text, opt(cfws)));
 
         let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -144,7 +144,7 @@ pub mod quoted_strings {
     };
 
     use super::{
-        folding_ws_and_comment::{CFWS, FWS},
+        folding_ws_and_comment::{cfws, fws},
         obsolete::is_obs_qtext,
         quoted_characters::quoted_pair,
     };
@@ -169,15 +169,15 @@ pub mod quoted_strings {
         Ok((remaining, parsed))
     }
 
-    /// quoted-string = [CFWS] DQUOTE *([FWS] qcontent) [FWS] DQUOTE [CFWS]
+    /// quoted-string = [cfws] DQUOTE *([fws] qcontent) [fws] DQUOTE [cfws]
     pub fn quoted_string(input: &[u8]) -> IResult<&[u8], &[u8]> {
         let parser = tuple((
-            opt(CFWS),
+            opt(cfws),
             DQUOTE,
-            many0(tuple((opt(FWS), qcontent))),
-            opt(FWS),
+            many0(tuple((opt(fws), qcontent))),
+            opt(fws),
             DQUOTE,
-            opt(CFWS),
+            opt(cfws),
         ));
 
         let (remaining, parsed) = recognize(parser)(input)?;
@@ -215,11 +215,11 @@ pub mod datetime {
         IResult,
     };
 
-    use super::folding_ws_and_comment::{CFWS, FWS};
+    use super::folding_ws_and_comment::{cfws, fws};
 
     // date-time = [ day-of-week "," ] date time [CFWS]
     pub fn date_time(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        let parser = tuple((opt(tuple((day_of_week, tag(b",")))), date, time, opt(CFWS)));
+        let parser = tuple((opt(tuple((day_of_week, tag(b",")))), date, time, opt(cfws)));
 
         let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -228,7 +228,7 @@ pub mod datetime {
 
     // day-of-week = ([FWS] day-name) / obs-day-of-week
     pub fn day_of_week(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        let parser = tuple((opt(FWS), day_name));
+        let parser = tuple((opt(fws), day_name));
 
         let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -263,7 +263,7 @@ pub mod datetime {
 
     // day = ([FWS] 1*2DIGIT FWS) / obs-day
     pub fn day(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        let parser = tuple((opt(FWS), take_while_m_n(1, 2, is_DIGIT), FWS));
+        let parser = tuple((opt(fws), take_while_m_n(1, 2, is_DIGIT), fws));
 
         let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -294,7 +294,7 @@ pub mod datetime {
 
     // year = (FWS 4*DIGIT FWS) / obs-year
     pub fn year(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        let parser = tuple((FWS, take_while_m_n(4, 8, is_DIGIT), FWS)); // FIXME: 4*?!
+        let parser = tuple((fws, take_while_m_n(4, 8, is_DIGIT), fws)); // FIXME: 4*?!
 
         let (remaining, parsed) = recognize(parser)(input)?;
 
@@ -357,7 +357,7 @@ pub mod datetime {
         // FIXME: obs- forms must not be used in SMTP. Never?
 
         let parser = tuple((
-            FWS,
+            fws,
             alt((tag(b"+"), tag(b"-"))),
             take_while_m_n(4, 4, is_DIGIT),
         ));
@@ -381,7 +381,7 @@ pub mod addr_spec {
 
     use super::{
         atom::dot_atom,
-        folding_ws_and_comment::{CFWS, FWS},
+        folding_ws_and_comment::{cfws, fws},
         obsolete::{obs_domain, obs_dtext, obs_local_part},
         quoted_strings::quoted_string,
     };
@@ -406,15 +406,15 @@ pub mod addr_spec {
         Ok((remaining, parsed))
     }
 
-    /// domain-literal = [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
+    /// domain-literal = [cfws] "[" *([fws] dtext) [fws] "]" [cfws]
     pub fn domain_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
         let parser = tuple((
-            opt(CFWS),
+            opt(cfws),
             tag(b"["),
-            many0(tuple((opt(FWS), dtext))),
-            opt(FWS),
+            many0(tuple((opt(fws), dtext))),
+            opt(fws),
             tag(b"]"),
-            opt(CFWS),
+            opt(cfws),
         ));
 
         let (remaining, parsed) = recognize(parser)(input)?;
@@ -460,7 +460,7 @@ pub mod identification {
     use super::{
         addr_spec::dtext,
         atom::dot_atom_text,
-        folding_ws_and_comment::CFWS,
+        folding_ws_and_comment::cfws,
         obsolete::{obs_id_left, obs_id_right},
     };
 
@@ -473,16 +473,16 @@ pub mod identification {
     // references = "References:" 1*msg-id CRLF
     // ...
 
-    /// msg-id = [CFWS] "<" id-left "@" id-right ">" [CFWS]
+    /// msg-id = [cfws] "<" id-left "@" id-right ">" [cfws]
     pub fn msg_id(input: &[u8]) -> IResult<&[u8], &[u8]> {
         let parser = tuple((
-            opt(CFWS),
+            opt(cfws),
             tag(b"<"),
             id_left,
             tag(b"@"),
             id_right,
             tag(b">"),
-            opt(CFWS),
+            opt(cfws),
         ));
 
         let (remaining, parsed) = recognize(parser)(input)?;
@@ -541,13 +541,13 @@ pub mod obsolete {
     /// return, line feed, and white space characters
     ///
     /// obs-NO-WS-CTL = %d1-8 / %d11 / %d12 / %d14-31 / %d127
-    pub fn is_obs_NO_WS_CTL(byte: u8) -> bool {
+    pub fn is_obs_no_ws_ctl(byte: u8) -> bool {
         matches!(byte, 1..=8 | 11 | 12 | 14..=31 | 127)
     }
 
     /// obs-qtext = obs-NO-WS-CTL
     pub fn is_obs_qtext(byte: u8) -> bool {
-        is_obs_NO_WS_CTL(byte)
+        is_obs_no_ws_ctl(byte)
     }
 
     /// obs-qp = "\" (%d0 / obs-NO-WS-CTL / LF / CR)
@@ -556,7 +556,7 @@ pub mod obsolete {
             tag(b"\\"),
             alt((
                 take_while_m_n(1, 1, |x| x == 0x00),
-                take_while_m_n(1, 1, is_obs_NO_WS_CTL),
+                take_while_m_n(1, 1, is_obs_no_ws_ctl),
                 LF,
                 CR,
             )),
@@ -589,7 +589,7 @@ pub mod obsolete {
 
     /// obs-dtext = obs-NO-WS-CTL / quoted-pair
     pub fn obs_dtext(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        let parser = alt((take_while_m_n(1, 1, is_obs_NO_WS_CTL), quoted_pair));
+        let parser = alt((take_while_m_n(1, 1, is_obs_no_ws_ctl), quoted_pair));
 
         let (remaining, parsed) = recognize(parser)(input)?;
 

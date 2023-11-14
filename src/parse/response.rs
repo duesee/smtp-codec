@@ -11,7 +11,7 @@ use nom::{
 };
 
 use crate::{
-    parse::{address::address_literal, number, Domain},
+    parse::{address::address_literal, domain, number},
     AuthMechanism, Capability, ReplyCode, Response, TextString,
 };
 
@@ -19,12 +19,12 @@ use crate::{
 ///            ( "220-" (Domain / address-literal) [ SP textstring ] CRLF
 ///           *( "220-" [ textstring ] CRLF )
 ///              "220" [ SP textstring ] CRLF )
-pub fn Greeting(input: &[u8]) -> IResult<&[u8], Response> {
+pub fn greeting(input: &[u8]) -> IResult<&[u8], Response> {
     let mut parser = alt((
         map(
             tuple((
                 tag(b"220 "),
-                alt((Domain, address_literal)),
+                alt((domain, address_literal)),
                 opt(preceded(SP, textstring)),
                 CRLF,
             )),
@@ -38,7 +38,7 @@ pub fn Greeting(input: &[u8]) -> IResult<&[u8], Response> {
         map(
             tuple((
                 tag(b"220-"),
-                alt((Domain, address_literal)),
+                alt((domain, address_literal)),
                 opt(preceded(SP, textstring)),
                 CRLF,
                 many0(delimited(tag(b"220-"), opt(textstring), CRLF)),
@@ -96,11 +96,11 @@ pub(crate) fn is_text_string_byte(byte: u8) -> bool {
 
 /// Reply-line = *( Reply-code "-" [ textstring ] CRLF )
 ///                 Reply-code [ SP textstring ] CRLF
-pub fn Reply_lines(input: &[u8]) -> IResult<&[u8], Response> {
+pub fn reply_lines(input: &[u8]) -> IResult<&[u8], Response> {
     let mut parser = map(
         tuple((
-            many0(tuple((Reply_code, tag(b"-"), opt(textstring), CRLF))),
-            Reply_code,
+            many0(tuple((reply_code, tag(b"-"), opt(textstring), CRLF))),
+            reply_code,
             opt(tuple((SP, textstring))),
             CRLF,
         )),
@@ -131,7 +131,7 @@ pub fn Reply_lines(input: &[u8]) -> IResult<&[u8], Response> {
 ///   2345
 /// 012345
 /// 0123456789
-pub fn Reply_code(input: &[u8]) -> IResult<&[u8], ReplyCode> {
+pub fn reply_code(input: &[u8]) -> IResult<&[u8], ReplyCode> {
     // FIXME: do not accept all codes.
     map_res(
         map_res(
@@ -153,7 +153,7 @@ pub fn Reply_code(input: &[u8]) -> IResult<&[u8], ReplyCode> {
 pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], Response> {
     let mut parser = alt((
         map(
-            tuple((tag(b"250 "), Domain, opt(preceded(SP, ehlo_greet)), CRLF)),
+            tuple((tag(b"250 "), domain, opt(preceded(SP, ehlo_greet)), CRLF)),
             |(_, domain, maybe_ehlo, _)| Response::Ehlo {
                 domain: domain.to_owned(),
                 greet: maybe_ehlo.map(|ehlo| ehlo.to_owned()),
@@ -163,7 +163,7 @@ pub fn ehlo_ok_rsp(input: &[u8]) -> IResult<&[u8], Response> {
         map(
             tuple((
                 tag(b"250-"),
-                Domain,
+                domain,
                 opt(preceded(SP, ehlo_greet)),
                 CRLF,
                 many0(delimited(tag(b"250-"), ehlo_line, CRLF)),
@@ -302,12 +302,12 @@ mod test {
     use crate::AuthMechanism;
 
     #[test]
-    fn test_Greeting() {
-        let greeting = b"220-example.org ESMTP Fake 4.93 #2 Thu, 16 Jul 2020 07:30:16 -0400\r\n\
+    fn test_greeting() {
+        let grt = b"220-example.org ESMTP Fake 4.93 #2 Thu, 16 Jul 2020 07:30:16 -0400\r\n\
 220-We do not authorize the use of this system to transport unsolicited,\r\n\
 220 and/or bulk e-mail.\r\n";
 
-        let (rem, out) = Greeting(greeting).unwrap();
+        let (rem, out) = greeting(grt).unwrap();
         assert_eq!(rem, b"");
         assert_eq!(
             out,
